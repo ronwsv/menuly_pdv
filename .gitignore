@@ -1,0 +1,29 @@
+# Windows
+nul
+Thumbs.db
+desktop.ini
+
+# Dart/Flutter
+.dart_tool/
+.packages
+build/
+*.iml
+pubspec.lock
+
+# IDE
+.idea/
+.vscode/
+.claude/
+
+# OS
+.DS_Store
+
+# Env
+.env
+
+# Arquivos não essenciais
+Kimi_Agent_Mapeamento de Sistema PDV/
+prototipo/
+NCM.csv
+Tabela_NCM_Vigente_20260214.json
+quero montar um sistema tipo frente de caixa parec.md
