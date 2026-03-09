@@ -10,6 +10,8 @@ class Produto {
   final int? fornecedorId;
   final double precoCusto;
   final double precoVenda;
+  final double? precoAtacado;
+  final int? qtdMinimaAtacado;
   final double? margemLucro;
   final String unidade;
   final String? tamanho;
@@ -37,6 +39,8 @@ class Produto {
     this.fornecedorId,
     required this.precoCusto,
     required this.precoVenda,
+    this.precoAtacado,
+    this.qtdMinimaAtacado,
     this.margemLucro,
     required this.unidade,
     this.tamanho,
@@ -70,6 +74,12 @@ class Produto {
           : null,
       precoCusto: double.parse(row['preco_custo'] ?? '0'),
       precoVenda: double.parse(row['preco_venda'] ?? '0'),
+      precoAtacado: row['preco_atacado'] != null
+          ? double.tryParse(row['preco_atacado']!)
+          : null,
+      qtdMinimaAtacado: row['qtd_minima_atacado'] != null
+          ? int.tryParse(row['qtd_minima_atacado']!)
+          : null,
       margemLucro: row['margem_lucro'] != null
           ? double.parse(row['margem_lucro']!)
           : null,
@@ -107,6 +117,8 @@ class Produto {
       'fornecedor_id': fornecedorId,
       'preco_custo': precoCusto,
       'preco_venda': precoVenda,
+      'preco_atacado': precoAtacado,
+      'qtd_minima_atacado': qtdMinimaAtacado,
       'margem_lucro': margemLucro,
       'unidade': unidade,
       'tamanho': tamanho,

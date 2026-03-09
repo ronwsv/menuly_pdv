@@ -162,7 +162,7 @@ class VendasRepository {
 
   Future<Map<String, String?>?> getProduto(int id) async {
     final results = await Database.instance.query(
-      'SELECT id, descricao, estoque_atual, preco_venda, bloqueado, ativo, is_combo FROM produtos WHERE id = :id',
+      'SELECT id, descricao, estoque_atual, preco_venda, preco_atacado, qtd_minima_atacado, bloqueado, ativo, is_combo FROM produtos WHERE id = :id',
       {'id': id.toString()},
     );
     if (results.isEmpty) return null;
@@ -341,6 +341,78 @@ class VendasRepository {
     );
     if (results.isEmpty) return 0;
     return int.parse(results.first['total'] ?? '0');
+  }
+
+  // ─── Gráficos / Analytics ─────────────────────────────────────
+
+  /// Sanitize a date string to prevent SQL injection (allows only YYYY-MM-DD and optional time).
+  static String _sanitizeDate(String d) =>
+      d.replaceAll(RegExp(r'[^0-9\-: ]'), '');
+
+  Future<List<Map<String, String?>>> resumoDiario({
+    required String dataInicio,
+    required String dataFim,
+  }) async {
+    final di = _sanitizeDate(dataInicio);
+    final df = _sanitizeDate(dataFim);
+    final result = await Database.pool.execute(
+      "SELECT DATE_FORMAT(criado_em, '%Y-%m-%d') as dia, "
+      "COUNT(*) as qtd_vendas, "
+      "SUM(total) as total_vendas, "
+      "AVG(total) as ticket_medio, "
+      "SUM(desconto_valor) as total_descontos "
+      "FROM vendas "
+      "WHERE status = 'finalizada' "
+      "AND criado_em >= '$di' "
+      "AND criado_em <= '$df 23:59:59' "
+      "GROUP BY dia "
+      "ORDER BY dia",
+    );
+    return result.rows.map((row) => row.assoc()).toList();
+  }
+
+  Future<List<Map<String, String?>>> vendasPorFormaPagamento({
+    required String dataInicio,
+    required String dataFim,
+  }) async {
+    final di = _sanitizeDate(dataInicio);
+    final df = _sanitizeDate(dataFim);
+    final result = await Database.pool.execute(
+      "SELECT vp.forma_pagamento, "
+      "COUNT(DISTINCT vp.venda_id) as qtd_vendas, "
+      "SUM(vp.valor) as total "
+      "FROM venda_pagamentos vp "
+      "JOIN vendas v ON vp.venda_id = v.id "
+      "WHERE v.status = 'finalizada' "
+      "AND v.criado_em >= '$di' "
+      "AND v.criado_em <= '$df 23:59:59' "
+      "GROUP BY vp.forma_pagamento "
+      "ORDER BY total DESC",
+    );
+    return result.rows.map((row) => row.assoc()).toList();
+  }
+
+  Future<List<Map<String, String?>>> receitaPorCategoria({
+    required String dataInicio,
+    required String dataFim,
+  }) async {
+    final di = _sanitizeDate(dataInicio);
+    final df = _sanitizeDate(dataFim);
+    final result = await Database.pool.execute(
+      "SELECT COALESCE(c.nome, 'Sem Categoria') as categoria, "
+      "COUNT(DISTINCT vi.venda_id) as qtd_vendas, "
+      "SUM(vi.total) as total "
+      "FROM venda_itens vi "
+      "JOIN vendas v ON vi.venda_id = v.id "
+      "LEFT JOIN produtos p ON vi.produto_id = p.id "
+      "LEFT JOIN categorias c ON p.categoria_id = c.id "
+      "WHERE v.status = 'finalizada' "
+      "AND v.criado_em >= '$di' "
+      "AND v.criado_em <= '$df 23:59:59' "
+      "GROUP BY c.id, c.nome "
+      "ORDER BY total DESC",
+    );
+    return result.rows.map((row) => row.assoc()).toList();
   }
 
   Future<List<Map<String, String?>>> buscarResumoComissoes({

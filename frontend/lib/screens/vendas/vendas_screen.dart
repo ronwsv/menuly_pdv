@@ -9,6 +9,7 @@ import '../../models/produto.dart';
 import '../../models/servico.dart';
 import '../../models/venda.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/configuracoes_provider.dart';
 import '../../providers/vendas_provider.dart';
 import '../../services/api_client.dart';
 import '../../services/receipt_service.dart';
@@ -256,6 +257,7 @@ class _VendasScreenState extends State<VendasScreen> {
                   build: (_) => ReceiptService.generateReceipt(
                     vendaData: vendaData,
                     operador: operador,
+                    paperWidthMm: int.tryParse(context.read<ConfiguracoesProvider>().getConfig('largura_cupom', '80')) ?? 80,
                   ),
                   canChangePageFormat: false,
                   canChangeOrientation: false,
@@ -997,12 +999,34 @@ class _VendaDetalheDialog extends StatelessWidget {
                           style: TextStyle(
                               color: AppTheme.textSecondary),
                         )),
-                        DataCell(Text(
-                          item['produto_descricao']?.toString() ?? '-',
-                          style: TextStyle(
-                            color: AppTheme.textPrimary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        DataCell(Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              child: Text(
+                                item['produto_descricao']?.toString() ?? '-',
+                                style: TextStyle(
+                                  color: AppTheme.textPrimary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (item['is_atacado'] == true)
+                              Container(
+                                margin: const EdgeInsets.only(left: 6),
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.accent.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(3),
+                                ),
+                                child: Text('ATACADO',
+                                    style: TextStyle(
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.accent)),
+                              ),
+                          ],
                         )),
                         DataCell(Text(
                           _parseDouble(item['quantidade'])
@@ -1014,7 +1038,12 @@ class _VendaDetalheDialog extends StatelessWidget {
                           currencyFormat
                               .format(_parseDouble(item['preco_unitario'])),
                           style: TextStyle(
-                              color: AppTheme.textPrimary),
+                              color: item['is_atacado'] == true
+                                  ? AppTheme.accent
+                                  : AppTheme.textPrimary,
+                              fontWeight: item['is_atacado'] == true
+                                  ? FontWeight.w600
+                                  : null),
                         )),
                         DataCell(Text(
                           currencyFormat

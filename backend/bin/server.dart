@@ -163,6 +163,14 @@ Future<void> main() async {
   print('      Migrando chave_nfe index...');
   await _migrateChaveNfeIndex();
 
+  // 1.97. Preço atacado nos produtos
+  print('      Migrando preco_atacado...');
+  await _migratePrecoAtacado();
+
+  // 1.98. Flag is_atacado em venda_itens
+  print('      Migrando is_atacado em venda_itens...');
+  await _migrateIsAtacadoVendaItens();
+
   print('      Migrações concluídas.');
 
   // 2. Corrigir hash do admin se for placeholder
@@ -716,4 +724,28 @@ Future<void> _migrateComboSnapshot() async {
   } catch (_) {
     // Column already exists
   }
+}
+
+Future<void> _migratePrecoAtacado() async {
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE produtos ADD COLUMN preco_atacado DECIMAL(10,2) DEFAULT NULL AFTER preco_venda',
+      {},
+    );
+  } catch (_) {}
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE produtos ADD COLUMN qtd_minima_atacado INT DEFAULT NULL AFTER preco_atacado',
+      {},
+    );
+  } catch (_) {}
+}
+
+Future<void> _migrateIsAtacadoVendaItens() async {
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE venda_itens ADD COLUMN is_atacado TINYINT(1) DEFAULT 0 AFTER total',
+      {},
+    );
+  } catch (_) {}
 }

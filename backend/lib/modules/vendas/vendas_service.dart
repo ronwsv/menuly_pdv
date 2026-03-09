@@ -222,10 +222,32 @@ class VendasService {
           }
         }
 
+        // Detectar e validar preço de atacado
+        final isAtacado = itemMap['is_atacado'] == true || itemMap['is_atacado'] == 1;
+        if (isAtacado) {
+          final prodPrecoAtacado = double.tryParse(produto['preco_atacado'] ?? '0') ?? 0;
+          final prodQtdMinima = int.tryParse(produto['qtd_minima_atacado'] ?? '0') ?? 0;
+
+          if (prodPrecoAtacado <= 0 || prodQtdMinima <= 0) {
+            throw ValidationException(
+              'Produto "${produto['descricao']}" não possui preço de atacado configurado',
+            );
+          }
+          if (quantidade < prodQtdMinima) {
+            throw ValidationException(
+              'Quantidade (${quantidade.toInt()}) insuficiente para preço atacado '
+              'de "${produto['descricao']}" (mínimo: $prodQtdMinima)',
+            );
+          }
+          // Corrigir preço unitário para o atacado real do cadastro
+          precoUnitario = prodPrecoAtacado;
+        }
+
         final totalItem = (quantidade * precoUnitario) - descontoItem;
         itensProcessados.add({
           'produto_id': produtoIdInt,
           'is_combo': produto['is_combo'] == '1',
+          'is_atacado': isAtacado,
           'quantidade': quantidade,
           'preco_unitario': precoUnitario,
           'desconto': descontoItem,
@@ -365,6 +387,9 @@ class VendasService {
         }
         if (item['servico_id'] != null) {
           itemData['servico_id'] = item['servico_id'].toString();
+        }
+        if (item['is_atacado'] == true) {
+          itemData['is_atacado'] = '1';
         }
 
         // For combos, snapshot components at sale time for correct cancellation
@@ -612,6 +637,7 @@ class VendasService {
               'quantidade': i.quantidade,
               'preco_unitario': i.precoUnitario,
               'desconto': i.desconto,
+              'is_atacado': i.isAtacado,
             })
         .toList();
 
@@ -700,6 +726,37 @@ class VendasService {
       'total_vendido': double.tryParse(r['total_vendido'] ?? '0') ?? 0,
       'total_comissao': double.tryParse(r['total_comissao'] ?? '0') ?? 0,
       'percentual_medio': double.tryParse(r['percentual_medio'] ?? '0') ?? 0,
+    }).toList();
+  }
+
+  // ─── Gráficos / Analytics ─────────────────────────────────────
+
+  Future<List<Map<String, dynamic>>> resumoDiario(String dataInicio, String dataFim) async {
+    final rows = await _repository.resumoDiario(dataInicio: dataInicio, dataFim: dataFim);
+    return rows.map((r) => <String, dynamic>{
+      'data': r['dia'],
+      'qtd_vendas': int.tryParse(r['qtd_vendas'] ?? '0') ?? 0,
+      'total_vendas': double.tryParse(r['total_vendas'] ?? '0') ?? 0,
+      'ticket_medio': double.tryParse(r['ticket_medio'] ?? '0') ?? 0,
+      'total_descontos': double.tryParse(r['total_descontos'] ?? '0') ?? 0,
+    }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> vendasPorFormaPagamento(String dataInicio, String dataFim) async {
+    final rows = await _repository.vendasPorFormaPagamento(dataInicio: dataInicio, dataFim: dataFim);
+    return rows.map((r) => <String, dynamic>{
+      'forma_pagamento': r['forma_pagamento'],
+      'qtd_vendas': int.tryParse(r['qtd_vendas'] ?? '0') ?? 0,
+      'total': double.tryParse(r['total'] ?? '0') ?? 0,
+    }).toList();
+  }
+
+  Future<List<Map<String, dynamic>>> receitaPorCategoria(String dataInicio, String dataFim) async {
+    final rows = await _repository.receitaPorCategoria(dataInicio: dataInicio, dataFim: dataFim);
+    return rows.map((r) => <String, dynamic>{
+      'categoria': r['categoria'],
+      'qtd_vendas': int.tryParse(r['qtd_vendas'] ?? '0') ?? 0,
+      'total': double.tryParse(r['total'] ?? '0') ?? 0,
     }).toList();
   }
 

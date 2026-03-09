@@ -14,6 +14,12 @@ class RelatoriosProvider extends ChangeNotifier {
   bool _isLoadingComissoes = false;
   String? _error;
 
+  // Charts data
+  List<Map<String, dynamic>> _resumoDiario = [];
+  List<Map<String, dynamic>> _porFormaPagamento = [];
+  List<Map<String, dynamic>> _receitaPorCategoria = [];
+  bool _isLoadingCharts = false;
+
   RelatoriosProvider(this._api);
 
   Map<String, dynamic> get vendasResumo => _vendasResumo;
@@ -24,6 +30,12 @@ class RelatoriosProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isLoadingComissoes => _isLoadingComissoes;
   String? get error => _error;
+
+  // Charts getters
+  List<Map<String, dynamic>> get resumoDiario => _resumoDiario;
+  List<Map<String, dynamic>> get porFormaPagamento => _porFormaPagamento;
+  List<Map<String, dynamic>> get receitaPorCategoria => _receitaPorCategoria;
+  bool get isLoadingCharts => _isLoadingCharts;
 
   Future<void> carregarResumoVendas({String? periodo}) async {
     _isLoading = true;
@@ -160,6 +172,33 @@ class RelatoriosProvider extends ChangeNotifier {
     }
 
     _isLoadingComissoes = false;
+    notifyListeners();
+  }
+
+  Future<void> carregarDadosGraficos({
+    required String dataInicio,
+    required String dataFim,
+  }) async {
+    _isLoadingCharts = true;
+    notifyListeners();
+
+    try {
+      final params = {'data_inicio': dataInicio, 'data_fim': dataFim};
+
+      final results = await Future.wait([
+        _api.get(ApiConfig.vendasResumoDiario, queryParams: params),
+        _api.get(ApiConfig.vendasPorFormaPagamento, queryParams: params),
+        _api.get(ApiConfig.vendasReceitaPorCategoria, queryParams: params),
+      ]);
+
+      _resumoDiario = (results[0]['data'] as List).cast<Map<String, dynamic>>();
+      _porFormaPagamento = (results[1]['data'] as List).cast<Map<String, dynamic>>();
+      _receitaPorCategoria = (results[2]['data'] as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoadingCharts = false;
     notifyListeners();
   }
 

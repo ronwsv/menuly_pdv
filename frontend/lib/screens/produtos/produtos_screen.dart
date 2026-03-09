@@ -427,10 +427,10 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
           final val = values[j].trim();
           if (val.isNotEmpty) {
             // Tentar converter números
-            if (['preco_venda', 'preco_custo'].contains(key)) {
+            if (['preco_venda', 'preco_custo', 'preco_atacado'].contains(key)) {
               row[key] = double.tryParse(val.replaceAll(',', '.')) ?? val;
             } else if (['estoque_atual', 'estoque_minimo', 'categoria_id',
-                'fornecedor_id'].contains(key)) {
+                'fornecedor_id', 'qtd_minima_atacado'].contains(key)) {
               row[key] = int.tryParse(val) ?? val;
             } else {
               row[key] = val;
@@ -753,6 +753,20 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
                       ),
 
                     Spacer(),
+
+                    // Wholesale price indicator
+                    if (produto.precoAtacado != null && produto.precoAtacado! > 0)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 2),
+                        child: Text(
+                          'Atacado: ${_currencyFormat.format(produto.precoAtacado!)} (${produto.qtdMinimaAtacado ?? 0}+ un)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppTheme.accent,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
 
                     // Price + Stock badge row
                     Row(

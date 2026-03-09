@@ -5,26 +5,29 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class ReceiptService {
-  static const double _paperWidth = 80 * PdfPageFormat.mm;
-  static const double _margin = 4 * PdfPageFormat.mm;
-
   static final _currencyFormat =
       NumberFormat.currency(locale: 'pt_BR', symbol: r'R$');
 
+  /// [paperWidthMm] accepts 58 or 80 (default).
   static Future<Uint8List> generateReceipt({
     required Map<String, dynamic> vendaData,
     required String operador,
     Map<String, dynamic>? emitente,
+    int paperWidthMm = 80,
   }) async {
     final pdf = pw.Document();
 
-    final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9);
-    final normal = const pw.TextStyle(fontSize: 8);
-    final small = const pw.TextStyle(fontSize: 7);
+    final is58 = paperWidthMm == 58;
+    final paperWidth = paperWidthMm * PdfPageFormat.mm;
+    final margin = (is58 ? 3.0 : 4.0) * PdfPageFormat.mm;
+
+    final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 8 : 9);
+    final normal = pw.TextStyle(fontSize: is58 ? 7 : 8);
+    final small = pw.TextStyle(fontSize: is58 ? 6 : 7);
     final titleStyle =
-        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11);
+        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 9 : 11);
     final bigBold =
-        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10);
+        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 8 : 10);
 
     // Parse data
     final itens = (vendaData['itens'] as List?) ?? [];
@@ -108,15 +111,19 @@ class ReceiptService {
     content.add(_divider());
 
     // ── Items header ──
+    final colQtd = is58 ? 16.0 : 20.0;
+    final colUnit = is58 ? 35.0 : 45.0;
+    final colTotal = is58 ? 40.0 : 50.0;
+
     content.add(pw.Row(
       children: [
-        pw.SizedBox(width: 20, child: pw.Text('QTD', style: bold)),
+        pw.SizedBox(width: colQtd, child: pw.Text('QTD', style: bold)),
         pw.Expanded(child: pw.Text('DESCRICAO', style: bold)),
         pw.SizedBox(
-            width: 45,
+            width: colUnit,
             child: pw.Text('UNIT', style: bold, textAlign: pw.TextAlign.right)),
         pw.SizedBox(
-            width: 50,
+            width: colTotal,
             child:
                 pw.Text('TOTAL', style: bold, textAlign: pw.TextAlign.right)),
       ],
@@ -134,7 +141,7 @@ class ReceiptService {
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
           pw.SizedBox(
-              width: 20,
+              width: colQtd,
               child: pw.Text(
                   qtd == qtd.truncateToDouble()
                       ? qtd.toInt().toString()
@@ -143,11 +150,11 @@ class ReceiptService {
           pw.Expanded(
               child: pw.Text(desc, style: normal, maxLines: 2)),
           pw.SizedBox(
-              width: 45,
+              width: colUnit,
               child: pw.Text(_formatCurrency(precoUnit),
                   style: normal, textAlign: pw.TextAlign.right)),
           pw.SizedBox(
-              width: 50,
+              width: colTotal,
               child: pw.Text(_formatCurrency(itemTotal),
                   style: normal, textAlign: pw.TextAlign.right)),
         ],
@@ -210,9 +217,9 @@ class ReceiptService {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat(
-          _paperWidth,
+          paperWidth,
           double.infinity,
-          marginAll: _margin,
+          marginAll: margin,
         ),
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,

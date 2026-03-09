@@ -725,12 +725,18 @@ class _SistemaTabState extends State<_SistemaTab> {
   final _moedaCtrl = TextEditingController();
   final _comissaoPadraoCtrl = TextEditingController();
   String _impressaoCupom = 'perguntar';
+  String _larguraCupom = '80';
   bool _saving = false;
 
   static const _opcoesImpressao = {
     'automatico': 'Imprimir automaticamente',
     'perguntar': 'Perguntar ao finalizar venda',
     'desativado': 'Nao imprimir cupom',
+  };
+
+  static const _opcoesLargura = {
+    '58': '58mm (Mini impressora)',
+    '80': '80mm (Padrao)',
   };
 
   @override
@@ -747,6 +753,7 @@ class _SistemaTabState extends State<_SistemaTab> {
     _moedaCtrl.text = configs['moeda'] ?? 'BRL';
     _comissaoPadraoCtrl.text = configs['comissao_percentual_padrao'] ?? '0';
     _impressaoCupom = configs['impressao_cupom'] ?? 'perguntar';
+    _larguraCupom = configs['largura_cupom'] ?? '80';
   }
 
   @override
@@ -769,6 +776,7 @@ class _SistemaTabState extends State<_SistemaTab> {
           'casas_decimais', _casasDecimaisCtrl.text.trim());
       await provider.salvarConfig('moeda', _moedaCtrl.text.trim());
       await provider.salvarConfig('impressao_cupom', _impressaoCupom);
+      await provider.salvarConfig('largura_cupom', _larguraCupom);
       await provider.salvarConfig(
           'comissao_percentual_padrao', _comissaoPadraoCtrl.text.trim());
 
@@ -805,6 +813,7 @@ class _SistemaTabState extends State<_SistemaTab> {
           _moedaCtrl.text = configs['moeda'] ?? 'BRL';
           _comissaoPadraoCtrl.text = configs['comissao_percentual_padrao'] ?? '0';
           _impressaoCupom = configs['impressao_cupom'] ?? 'perguntar';
+          _larguraCupom = configs['largura_cupom'] ?? '80';
         }
 
         return SingleChildScrollView(
@@ -921,25 +930,54 @@ class _SistemaTabState extends State<_SistemaTab> {
                 ),
                 SizedBox(height: 12),
 
-                DropdownButtonFormField<String>(
-                  value: _impressaoCupom,
-                  decoration: InputDecoration(
-                    labelText: 'Ao finalizar venda',
-                    prefixIcon: Icon(Icons.receipt_long,
-                        color: AppTheme.textSecondary, size: 20),
-                  ),
-                  dropdownColor: AppTheme.cardSurface,
-                  style: TextStyle(
-                      color: AppTheme.textPrimary, fontSize: 14),
-                  items: _opcoesImpressao.entries
-                      .map((e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text(e.value),
-                          ))
-                      .toList(),
-                  onChanged: (v) {
-                    if (v != null) setState(() => _impressaoCupom = v);
-                  },
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _impressaoCupom,
+                        decoration: InputDecoration(
+                          labelText: 'Ao finalizar venda',
+                          prefixIcon: Icon(Icons.receipt_long,
+                              color: AppTheme.textSecondary, size: 20),
+                        ),
+                        dropdownColor: AppTheme.cardSurface,
+                        style: TextStyle(
+                            color: AppTheme.textPrimary, fontSize: 14),
+                        items: _opcoesImpressao.entries
+                            .map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                ))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _impressaoCupom = v);
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        value: _larguraCupom,
+                        decoration: InputDecoration(
+                          labelText: 'Largura do Cupom',
+                          prefixIcon: Icon(Icons.straighten,
+                              color: AppTheme.textSecondary, size: 20),
+                        ),
+                        dropdownColor: AppTheme.cardSurface,
+                        style: TextStyle(
+                            color: AppTheme.textPrimary, fontSize: 14),
+                        items: _opcoesLargura.entries
+                            .map((e) => DropdownMenuItem(
+                                  value: e.key,
+                                  child: Text(e.value),
+                                ))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) setState(() => _larguraCupom = v);
+                        },
+                      ),
+                    ),
+                  ],
                 ),
 
                 SizedBox(height: 24),

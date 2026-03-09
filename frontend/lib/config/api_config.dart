@@ -113,6 +113,11 @@ class ApiConfig {
   static String creditosCliente(int clienteId) => '$devolucoes/creditos/cliente/$clienteId';
   static String creditoUtilizar(int id) => '$devolucoes/creditos/$id/utilizar';
 
+  // Analytics / Graficos
+  static const String vendasResumoDiario = '$baseUrl/vendas/resumo-diario';
+  static const String vendasPorFormaPagamento = '$baseUrl/vendas/por-forma-pagamento';
+  static const String vendasReceitaPorCategoria = '$baseUrl/vendas/receita-por-categoria';
+
   // Comissoes
   static const String comissoes = '$baseUrl/vendas/comissoes';
   static const String comissoesResumo = '$baseUrl/vendas/comissoes/resumo';

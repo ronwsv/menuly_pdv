@@ -5,9 +5,7 @@ import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
 class FechamentoReceiptService {
-  static const double _paperWidth = 80 * PdfPageFormat.mm;
-  static const double _margin = 4 * PdfPageFormat.mm;
-
+  /// [paperWidthMm] accepts 58 or 80 (default).
   static Future<Uint8List> generate({
     required String caixaNome,
     required String dataInicio,
@@ -18,16 +16,21 @@ class FechamentoReceiptService {
     required double totalSaidas,
     required double saldoEsperado,
     required NumberFormat currencyFormat,
+    int paperWidthMm = 80,
   }) async {
     final pdf = pw.Document();
 
-    final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 9);
-    final normal = const pw.TextStyle(fontSize: 8);
-    final small = const pw.TextStyle(fontSize: 7);
+    final is58 = paperWidthMm == 58;
+    final paperWidth = paperWidthMm * PdfPageFormat.mm;
+    final margin = (is58 ? 3.0 : 4.0) * PdfPageFormat.mm;
+
+    final bold = pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 8 : 9);
+    final normal = pw.TextStyle(fontSize: is58 ? 7 : 8);
+    final small = pw.TextStyle(fontSize: is58 ? 6 : 7);
     final titleStyle =
-        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11);
+        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 9 : 11);
     final bigBold =
-        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 10);
+        pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: is58 ? 8 : 10);
 
     final content = <pw.Widget>[];
 
@@ -51,14 +54,17 @@ class FechamentoReceiptService {
       content.add(pw.Text('VENDAS POR FORMA DE PAGAMENTO', style: bold));
       content.add(pw.SizedBox(height: 4));
 
+      final colQtd = is58 ? 20.0 : 25.0;
+      final colTotal = is58 ? 42.0 : 55.0;
+
       content.add(pw.Row(children: [
         pw.Expanded(child: pw.Text('FORMA', style: bold)),
         pw.SizedBox(
-            width: 25,
+            width: colQtd,
             child: pw.Text('QTD', style: bold,
                 textAlign: pw.TextAlign.right)),
         pw.SizedBox(
-            width: 55,
+            width: colTotal,
             child: pw.Text('TOTAL', style: bold,
                 textAlign: pw.TextAlign.right)),
       ]));
@@ -72,11 +78,11 @@ class FechamentoReceiptService {
         content.add(pw.Row(children: [
           pw.Expanded(child: pw.Text(forma, style: normal)),
           pw.SizedBox(
-              width: 25,
+              width: colQtd,
               child: pw.Text(qtd, style: normal,
                   textAlign: pw.TextAlign.right)),
           pw.SizedBox(
-              width: 55,
+              width: colTotal,
               child: pw.Text(currencyFormat.format(total), style: normal,
                   textAlign: pw.TextAlign.right)),
         ]));
@@ -90,15 +96,19 @@ class FechamentoReceiptService {
       content.add(pw.Text('MOVIMENTOS POR CATEGORIA', style: bold));
       content.add(pw.SizedBox(height: 4));
 
+      final colTipo = is58 ? 28.0 : 40.0;
+      final colQtdMov = is58 ? 20.0 : 25.0;
+      final colTotalMov = is58 ? 42.0 : 55.0;
+
       content.add(pw.Row(children: [
-        pw.SizedBox(width: 40, child: pw.Text('TIPO', style: bold)),
+        pw.SizedBox(width: colTipo, child: pw.Text('TIPO', style: bold)),
         pw.Expanded(child: pw.Text('CATEG.', style: bold)),
         pw.SizedBox(
-            width: 25,
+            width: colQtdMov,
             child: pw.Text('QTD', style: bold,
                 textAlign: pw.TextAlign.right)),
         pw.SizedBox(
-            width: 55,
+            width: colTotalMov,
             child: pw.Text('TOTAL', style: bold,
                 textAlign: pw.TextAlign.right)),
       ]));
@@ -111,14 +121,14 @@ class FechamentoReceiptService {
         final total = _parseDouble(m['total']);
 
         content.add(pw.Row(children: [
-          pw.SizedBox(width: 40, child: pw.Text(tipo, style: normal)),
+          pw.SizedBox(width: colTipo, child: pw.Text(tipo, style: normal)),
           pw.Expanded(child: pw.Text(categ, style: normal)),
           pw.SizedBox(
-              width: 25,
+              width: colQtdMov,
               child: pw.Text(qtd, style: normal,
                   textAlign: pw.TextAlign.right)),
           pw.SizedBox(
-              width: 55,
+              width: colTotalMov,
               child: pw.Text(currencyFormat.format(total), style: normal,
                   textAlign: pw.TextAlign.right)),
         ]));
@@ -155,9 +165,9 @@ class FechamentoReceiptService {
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat(
-          _paperWidth,
+          paperWidth,
           double.infinity,
-          marginAll: _margin,
+          marginAll: margin,
         ),
         build: (context) => pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.stretch,

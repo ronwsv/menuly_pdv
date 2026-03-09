@@ -117,12 +117,13 @@ class ProdutosProvider extends ChangeNotifier {
   Future<String?> gerarModeloCSV() async {
     const sep = ';';
     final header = [
-      'descricao', 'preco_venda', 'preco_custo', 'codigo_barras',
+      'descricao', 'preco_venda', 'preco_custo', 'preco_atacado',
+      'qtd_minima_atacado', 'codigo_barras',
       'codigo_interno', 'unidade', 'estoque_atual', 'estoque_minimo',
       'ncm_code', 'tributacao', 'detalhes',
     ].join(sep);
     final exemplo = [
-      'Produto Exemplo', '29.90', '15.00', '7890123456789',
+      'Produto Exemplo', '29.90', '15.00', '25.00', '10', '7890123456789',
       'PROD001', 'un', '50', '10', '6109.10.00', '', 'Observacoes aqui',
     ].join(sep);
     final csv = '$header\n$exemplo\n';

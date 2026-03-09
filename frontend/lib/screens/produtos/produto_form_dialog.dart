@@ -39,6 +39,8 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
   late final TextEditingController _tributacaoCtrl;
   late final TextEditingController _detalhesCtrl;
   late final TextEditingController _tamanhoCtrl;
+  late final TextEditingController _precoAtacadoCtrl;
+  late final TextEditingController _qtdMinimaAtacadoCtrl;
 
   int? _categoriaId;
   int? _fornecedorId;
@@ -87,6 +89,12 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
     _tributacaoCtrl = TextEditingController(text: p?.tributacao ?? '');
     _detalhesCtrl = TextEditingController(text: p?.detalhes ?? '');
     _tamanhoCtrl = TextEditingController(text: p?.tamanho ?? '');
+    _precoAtacadoCtrl = TextEditingController(
+      text: p?.precoAtacado != null ? p!.precoAtacado!.toStringAsFixed(2) : '',
+    );
+    _qtdMinimaAtacadoCtrl = TextEditingController(
+      text: p?.qtdMinimaAtacado != null ? p!.qtdMinimaAtacado.toString() : '',
+    );
     _categoriaId = p?.categoriaId;
     _fornecedorId = p?.fornecedorId;
     _unidade = p?.unidade ?? 'un';
@@ -157,6 +165,8 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
     _tributacaoCtrl.dispose();
     _detalhesCtrl.dispose();
     _tamanhoCtrl.dispose();
+    _precoAtacadoCtrl.dispose();
+    _qtdMinimaAtacadoCtrl.dispose();
     super.dispose();
   }
 
@@ -241,6 +251,8 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
       'tamanho': _tamanhoCtrl.text.trim().isEmpty ? null : _tamanhoCtrl.text.trim(),
       'preco_custo': double.tryParse(_precoCustoCtrl.text.trim()) ?? 0,
       'preco_venda': double.tryParse(_precoVendaCtrl.text.trim()) ?? 0,
+      'preco_atacado': double.tryParse(_precoAtacadoCtrl.text.trim()) ?? 0,
+      'qtd_minima_atacado': int.tryParse(_qtdMinimaAtacadoCtrl.text.trim()) ?? 0,
       'estoque_atual': _isCombo ? 0 : (int.tryParse(_estoqueAtualCtrl.text.trim()) ?? 0),
       'estoque_minimo': _isCombo ? 0 : (int.tryParse(_estoqueMinimoCtrl.text.trim()) ?? 0),
       'is_combo': _isCombo,
@@ -289,7 +301,7 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
         side: BorderSide(color: AppTheme.border),
       ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 700, maxHeight: _isCombo ? 750 : 620),
+        constraints: BoxConstraints(maxWidth: 700, maxHeight: _isCombo ? 800 : 680),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Form(
@@ -510,6 +522,43 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
             ],
           );
         }),
+        SizedBox(height: 12),
+
+        // Preco Atacado + Qtd Minima Atacado
+        Row(
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _precoAtacadoCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Preço Atacado',
+                  hintText: 'Opcional',
+                  hintStyle: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                keyboardType:
+                    const TextInputType.numberWithOptions(decimal: true),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                ],
+              ),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _qtdMinimaAtacadoCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Qtd Min. Atacado',
+                  hintText: 'Ex: 10',
+                  hintStyle: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+                style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              ),
+            ),
+          ],
+        ),
         SizedBox(height: 12),
 
         // Estoque Atual + Estoque Minimo (hidden for combos)

@@ -7,6 +7,7 @@ class VendaItem {
   final double precoUnitario;
   final double desconto;
   final double total;
+  final bool isAtacado;
   final DateTime? criadoEm;
   final String? comboSnapshot;
 
@@ -22,6 +23,7 @@ class VendaItem {
     required this.precoUnitario,
     this.desconto = 0,
     required this.total,
+    this.isAtacado = false,
     this.criadoEm,
     this.comboSnapshot,
     this.produtoDescricao,
@@ -39,6 +41,7 @@ class VendaItem {
       precoUnitario: double.parse(row['preco_unitario'] ?? '0'),
       desconto: double.parse(row['desconto'] ?? '0'),
       total: double.parse(row['total'] ?? '0'),
+      isAtacado: row['is_atacado'] == '1',
       criadoEm:
           row['criado_em'] != null ? DateTime.parse(row['criado_em']!) : null,
       comboSnapshot: row['combo_snapshot'],
@@ -56,6 +59,7 @@ class VendaItem {
       'preco_unitario': precoUnitario,
       'desconto': desconto,
       'total': total,
+      'is_atacado': isAtacado,
       'criado_em': criadoEm?.toIso8601String(),
       if (comboSnapshot != null) 'combo_snapshot': comboSnapshot,
       if (produtoDescricao != null) 'produto_descricao': produtoDescricao,

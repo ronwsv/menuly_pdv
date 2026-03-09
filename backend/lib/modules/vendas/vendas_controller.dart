@@ -71,6 +71,30 @@ class VendasController {
     return JsonResponse.created(venda);
   }
 
+  Future<Response> resumoDiario(Request request) async {
+    final queryParams = request.url.queryParameters;
+    final dataInicio = queryParams['data_inicio'] ?? DateTime.now().subtract(Duration(days: 30)).toIso8601String().split('T').first;
+    final dataFim = queryParams['data_fim'] ?? DateTime.now().toIso8601String().split('T').first;
+    final result = await _service.resumoDiario(dataInicio, dataFim);
+    return JsonResponse.ok(result);
+  }
+
+  Future<Response> vendasPorFormaPagamento(Request request) async {
+    final queryParams = request.url.queryParameters;
+    final dataInicio = queryParams['data_inicio'] ?? DateTime.now().subtract(Duration(days: 30)).toIso8601String().split('T').first;
+    final dataFim = queryParams['data_fim'] ?? DateTime.now().toIso8601String().split('T').first;
+    final result = await _service.vendasPorFormaPagamento(dataInicio, dataFim);
+    return JsonResponse.ok(result);
+  }
+
+  Future<Response> receitaPorCategoria(Request request) async {
+    final queryParams = request.url.queryParameters;
+    final dataInicio = queryParams['data_inicio'] ?? DateTime.now().subtract(Duration(days: 30)).toIso8601String().split('T').first;
+    final dataFim = queryParams['data_fim'] ?? DateTime.now().toIso8601String().split('T').first;
+    final result = await _service.receitaPorCategoria(dataInicio, dataFim);
+    return JsonResponse.ok(result);
+  }
+
   Future<Response> listarComissoes(Request request) async {
     final queryParams = request.url.queryParameters;
     final page = int.tryParse(queryParams['page'] ?? '1') ?? 1;

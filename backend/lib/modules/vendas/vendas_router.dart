@@ -15,6 +15,28 @@ Router vendasRouter(VendasController controller) {
         ),
   );
 
+  // Analytics routes must come BEFORE /<id> to avoid being caught by the wildcard
+  router.get(
+    '/resumo-diario',
+    Pipeline().addMiddleware(auth).addHandler(
+          (Request req) => controller.resumoDiario(req),
+        ),
+  );
+
+  router.get(
+    '/por-forma-pagamento',
+    Pipeline().addMiddleware(auth).addHandler(
+          (Request req) => controller.vendasPorFormaPagamento(req),
+        ),
+  );
+
+  router.get(
+    '/receita-por-categoria',
+    Pipeline().addMiddleware(auth).addHandler(
+          (Request req) => controller.receitaPorCategoria(req),
+        ),
+  );
+
   // Comissões routes must come BEFORE /<id> to avoid being caught by the wildcard
   router.get(
     '/comissoes',

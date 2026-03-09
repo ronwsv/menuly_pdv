@@ -149,6 +149,22 @@ class ProdutosService {
     }
     dbData['preco_custo'] = precoCustoNum.toString();
     dbData['preco_venda'] = precoVendaNum.toString();
+    if (data['preco_atacado'] != null) {
+      final pa = data['preco_atacado'] is num
+          ? (data['preco_atacado'] as num).toDouble()
+          : double.tryParse(data['preco_atacado'].toString());
+      if (pa != null && pa > 0) {
+        dbData['preco_atacado'] = pa.toString();
+      }
+    }
+    if (data['qtd_minima_atacado'] != null) {
+      final qm = data['qtd_minima_atacado'] is int
+          ? data['qtd_minima_atacado'] as int
+          : int.tryParse(data['qtd_minima_atacado'].toString());
+      if (qm != null && qm > 0) {
+        dbData['qtd_minima_atacado'] = qm.toString();
+      }
+    }
     if (margemLucro != null) {
       dbData['margem_lucro'] = margemLucro.toStringAsFixed(2);
     }
@@ -219,6 +235,8 @@ class ProdutosService {
       'fornecedor_id',
       'preco_custo',
       'preco_venda',
+      'preco_atacado',
+      'qtd_minima_atacado',
       'unidade',
       'tamanho',
       'estoque_atual',
@@ -232,6 +250,23 @@ class ProdutosService {
     for (final field in allowedFields) {
       if (data.containsKey(field) && data[field] != null) {
         dbData[field] = data[field].toString();
+      }
+    }
+
+    // Handle clearing atacado fields (allow setting to NULL via value 0 or empty)
+    if (data.containsKey('preco_atacado')) {
+      final val = data['preco_atacado'];
+      if (val == null || val == 0 || val == '' || val == '0') {
+        // Remove from dbData and set NULL via raw query handled below
+        dbData.remove('preco_atacado');
+        await _repository.update(id, {'preco_atacado': '0'});
+      }
+    }
+    if (data.containsKey('qtd_minima_atacado')) {
+      final val = data['qtd_minima_atacado'];
+      if (val == null || val == 0 || val == '' || val == '0') {
+        dbData.remove('qtd_minima_atacado');
+        await _repository.update(id, {'qtd_minima_atacado': '0'});
       }
     }
 

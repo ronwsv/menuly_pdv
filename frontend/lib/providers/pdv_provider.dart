@@ -8,7 +8,9 @@ class CartItem {
   final int produtoId;
   final String descricao;
   final String? codigoBarras;
-  final double precoUnitario;
+  final double precoVenda;
+  final double? precoAtacado;
+  final int? qtdMinimaAtacado;
   int quantidade;
   final String unidade;
 
@@ -16,10 +18,21 @@ class CartItem {
     required this.produtoId,
     required this.descricao,
     this.codigoBarras,
-    required this.precoUnitario,
+    required this.precoVenda,
+    this.precoAtacado,
+    this.qtdMinimaAtacado,
     this.quantidade = 1,
     this.unidade = 'un',
   });
+
+  bool get isAtacado =>
+      precoAtacado != null &&
+      precoAtacado! > 0 &&
+      qtdMinimaAtacado != null &&
+      qtdMinimaAtacado! > 0 &&
+      quantidade >= qtdMinimaAtacado!;
+
+  double get precoUnitario => isAtacado ? precoAtacado! : precoVenda;
 
   double get subtotal => precoUnitario * quantidade;
 }
@@ -111,7 +124,9 @@ class PdvProvider extends ChangeNotifier {
         produtoId: produto.id,
         descricao: produto.descricao,
         codigoBarras: produto.codigoBarras,
-        precoUnitario: produto.precoVenda,
+        precoVenda: produto.precoVenda,
+        precoAtacado: produto.precoAtacado,
+        qtdMinimaAtacado: produto.qtdMinimaAtacado,
         quantidade: quantidade,
         unidade: produto.unidade,
       ));
@@ -210,7 +225,9 @@ class PdvProvider extends ChangeNotifier {
       _itens.add(CartItem(
         produtoId: prodId is int ? prodId : int.tryParse(prodId.toString()) ?? 0,
         descricao: item['produto_descricao']?.toString() ?? item['descricao']?.toString() ?? '',
-        precoUnitario: _toDouble(item['preco_unitario']),
+        precoVenda: _toDouble(item['preco_unitario']),
+        precoAtacado: item['preco_atacado'] != null ? _toDouble(item['preco_atacado']) : null,
+        qtdMinimaAtacado: item['qtd_minima_atacado'] != null ? _toInt(item['qtd_minima_atacado']) : null,
         quantidade: _toInt(item['quantidade']),
         unidade: item['unidade']?.toString() ?? 'un',
       ));
@@ -260,6 +277,7 @@ class PdvProvider extends ChangeNotifier {
           'produto_id': item.produtoId,
           'quantidade': item.quantidade,
           'preco_unitario': item.precoUnitario,
+          'is_atacado': item.isAtacado,
         }).toList(),
       };
       if (valorRecebido != null) {
@@ -304,6 +322,7 @@ class PdvProvider extends ChangeNotifier {
           'produto_id': item.produtoId,
           'quantidade': item.quantidade,
           'preco_unitario': item.precoUnitario,
+          'is_atacado': item.isAtacado,
         }).toList(),
       };
       if (_clienteId != null) {

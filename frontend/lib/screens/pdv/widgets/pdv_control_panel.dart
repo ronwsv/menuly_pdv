@@ -384,6 +384,12 @@ class _PdvControlPanelState extends State<PdvControlPanel> {
                                           fontWeight: FontWeight.w600,
                                           color:
                                               AppTheme.greenSuccess)),
+                                  if (p.precoAtacado != null && p.precoAtacado! > 0)
+                                    Text(
+                                        'Atac: ${currencyFormat.format(p.precoAtacado!)} (${p.qtdMinimaAtacado}+)',
+                                        style: TextStyle(
+                                            fontSize: 10,
+                                            color: AppTheme.accent)),
                                   Text(
                                       'Est: ${p.estoqueEfetivo}${p.isCombo ? ' (combo)' : ''}',
                                       style: TextStyle(

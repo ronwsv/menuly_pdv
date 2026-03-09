@@ -10,6 +10,10 @@ import '../../providers/estoque_provider.dart';
 import '../../providers/relatorios_provider.dart';
 import '../../providers/configuracoes_provider.dart';
 import '../../models/configuracao.dart';
+import '../../widgets/charts/chart_card.dart';
+import '../../widgets/charts/sales_line_chart.dart';
+import '../../widgets/charts/payment_pie_chart.dart';
+import '../../widgets/charts/ranking_bar_chart.dart';
 
 class RelatoriosScreen extends StatefulWidget {
   RelatoriosScreen({super.key});
@@ -60,6 +64,7 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     switch (_selectedSection) {
       case 0: // Vendas
         context.read<VendasProvider>().carregarVendas();
+        _carregarGraficos();
         break;
       case 1: // Produtos
         context.read<ProdutosProvider>().carregarProdutos();
@@ -74,6 +79,29 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         _carregarVendedores();
         break;
     }
+  }
+
+  void _carregarGraficos() {
+    final now = DateTime.now();
+    int days;
+    switch (_periodoVendas) {
+      case '1':
+        days = 1;
+        break;
+      case '7':
+        days = 7;
+        break;
+      case '30':
+        days = 30;
+        break;
+      default:
+        days = 365;
+    }
+    final inicio = now.subtract(Duration(days: days));
+    context.read<RelatoriosProvider>().carregarDadosGraficos(
+      dataInicio: inicio.toIso8601String().split('T').first,
+      dataFim: now.toIso8601String().split('T').first,
+    );
   }
 
   void _carregarVendedores() async {
@@ -311,6 +339,63 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
               ),
               SizedBox(height: 20),
 
+              // Charts
+              Consumer<RelatoriosProvider>(
+                builder: (context, relProv, _) {
+                  if (relProv.isLoadingCharts) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                    );
+                  }
+                  return Column(
+                    children: [
+                      // Faturamento diario (line chart)
+                      ChartCard(
+                        title: 'Faturamento Diario',
+                        chart: SalesLineChart(
+                          data: relProv.resumoDiario,
+                          currencyFormat: _currencyFormat,
+                        ),
+                      ),
+                      SizedBox(height: 16),
+                      // Row with pie + bar
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: ChartCard(
+                              title: 'Formas de Pagamento',
+                              height: 200,
+                              chart: PaymentPieChart(
+                                data: relProv.porFormaPagamento,
+                                currencyFormat: _currencyFormat,
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 16),
+                          Expanded(
+                            child: ChartCard(
+                              title: 'Receita por Categoria',
+                              height: 200,
+                              chart: RankingBarChart(
+                                data: relProv.receitaPorCategoria,
+                                labelKey: 'categoria',
+                                valueKey: 'total',
+                                currencyFormat: _currencyFormat,
+                                barColor: AppTheme.greenSuccess,
+                                maxItems: 6,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  );
+                },
+              ),
+              SizedBox(height: 20),
+
               // Last sales table
               Text(
                 'Ultimas Vendas',
@@ -423,7 +508,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           return Padding(
             padding: const EdgeInsets.only(right: 8),
             child: OutlinedButton(
-              onPressed: () => setState(() => _periodoVendas = p.$1),
+              onPressed: () {
+                setState(() => _periodoVendas = p.$1);
+                _carregarGraficos();
+              },
               style: OutlinedButton.styleFrom(
                 backgroundColor:
                     selected ? AppTheme.primary : Colors.transparent,
@@ -680,7 +768,35 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
       return const _EmptyState(message: 'Nenhum dado de vendas encontrado');
     }
     return SingleChildScrollView(
-      child: SizedBox(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Chart - Top 10 produtos
+          if (_isAdmin)
+            ChartCard(
+              title: 'Top Produtos por Faturamento',
+              chart: RankingBarChart(
+                data: _rankingGeral,
+                labelKey: 'descricao',
+                valueKey: 'total_faturamento',
+                currencyFormat: _currencyFormat,
+                barColor: AppTheme.accent,
+                maxItems: 10,
+              ),
+            )
+          else
+            ChartCard(
+              title: 'Top Produtos por Quantidade',
+              chart: RankingBarChart(
+                data: _rankingGeral,
+                labelKey: 'descricao',
+                valueKey: 'total_quantidade',
+                maxItems: 10,
+              ),
+            ),
+          SizedBox(height: 16),
+          // Table
+          SizedBox(
         width: double.infinity,
         child: DataTable(
           headingRowColor: WidgetStateProperty.all(AppTheme.scaffoldBackground),
@@ -707,6 +823,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
             ]);
           }),
         ),
+      ),
+        ],
       ),
     );
   }
@@ -892,6 +1010,23 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
               ),
               SizedBox(height: 20),
 
+              // Chart - Comissao por vendedor
+              if (resumo.isNotEmpty) ...[
+                ChartCard(
+                  title: 'Comissao por Vendedor',
+                  height: 200,
+                  chart: RankingBarChart(
+                    data: resumo,
+                    labelKey: 'vendedor_nome',
+                    valueKey: 'total_comissao',
+                    currencyFormat: _currencyFormat,
+                    barColor: AppTheme.accent,
+                    maxItems: 8,
+                  ),
+                ),
+                SizedBox(height: 20),
+              ],
+
               // Resumo por vendedor
               if (resumo.isNotEmpty) ...[
                 Text(
@@ -1044,6 +1179,23 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
     );
   }
 
+  Widget _buildEstoqueChart(List<Map<String, dynamic>> abaixoMinimo) {
+    // Build data for a grouped bar chart showing atual vs minimo
+    final items = abaixoMinimo.take(8).toList();
+    final chartData = items.map((item) => <String, dynamic>{
+      'descricao': item['descricao']?.toString() ?? '',
+      'estoque_atual': ((item['estoque_atual'] ?? 0) as num).toDouble(),
+    }).toList();
+
+    return RankingBarChart(
+      data: chartData,
+      labelKey: 'descricao',
+      valueKey: 'estoque_atual',
+      barColor: AppTheme.error,
+      maxItems: 8,
+    );
+  }
+
   static double _parseDouble(dynamic v) {
     if (v == null) return 0.0;
     if (v is double) return v;
@@ -1121,6 +1273,16 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
                 ],
               ),
               SizedBox(height: 20),
+
+              // Chart - Estoque critico
+              if (abaixoMinimo.isNotEmpty) ...[
+                ChartCard(
+                  title: 'Estoque Critico (Atual vs Minimo)',
+                  height: 200,
+                  chart: _buildEstoqueChart(abaixoMinimo),
+                ),
+                SizedBox(height: 20),
+              ],
 
               // Below minimum stock table
               Text(

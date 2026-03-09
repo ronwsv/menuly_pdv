@@ -181,14 +181,23 @@ class PdvCartTable extends StatelessWidget {
                                     textAlign: TextAlign.center)),
                             SizedBox(
                                 width: 120,
-                                child: Text(
-                                    currencyFormat
-                                        .format(item.precoUnitario),
-                                    style: TextStyle(
-                                        fontSize: 16,
-                                        color: AppTheme.textPrimary,
-                                        fontFamily: 'Consolas'),
-                                    textAlign: TextAlign.right)),
+                                child: Tooltip(
+                                    message: item.isAtacado
+                                        ? 'Preço atacado (${item.qtdMinimaAtacado}+ un)'
+                                        : '',
+                                    child: Text(
+                                        currencyFormat
+                                            .format(item.precoUnitario),
+                                        style: TextStyle(
+                                            fontSize: 16,
+                                            color: item.isAtacado
+                                                ? AppTheme.accent
+                                                : AppTheme.textPrimary,
+                                            fontWeight: item.isAtacado
+                                                ? FontWeight.w600
+                                                : null,
+                                            fontFamily: 'Consolas'),
+                                        textAlign: TextAlign.right))),
                             SizedBox(
                                 width: 120,
                                 child: Text(

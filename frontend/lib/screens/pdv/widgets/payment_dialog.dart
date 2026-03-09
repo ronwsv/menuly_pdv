@@ -422,6 +422,7 @@ class _PaymentDialogState extends State<PaymentDialog> {
                       vendaData: data,
                       operador: operador,
                       emitente: emitente,
+                      paperWidthMm: int.tryParse(context.read<ConfiguracoesProvider>().getConfig('largura_cupom', '80')) ?? 80,
                     ),
                     canChangePageFormat: false,
                     canChangeOrientation: false,

@@ -48,6 +48,8 @@ class Produto {
   final String? tamanho;
   final double precoCusto;
   final double precoVenda;
+  final double? precoAtacado;
+  final int? qtdMinimaAtacado;
   final double margemLucro;
   final int estoqueAtual;
   final int estoqueMinimo;
@@ -74,6 +76,8 @@ class Produto {
     this.tamanho,
     this.precoCusto = 0,
     required this.precoVenda,
+    this.precoAtacado,
+    this.qtdMinimaAtacado,
     this.margemLucro = 0,
     this.estoqueAtual = 0,
     this.estoqueMinimo = 0,
@@ -113,6 +117,12 @@ class Produto {
       tamanho: json['tamanho']?.toString(),
       precoCusto: _parseDouble(json['preco_custo']),
       precoVenda: _parseDouble(json['preco_venda']),
+      precoAtacado: json['preco_atacado'] != null && json['preco_atacado'] != 0
+          ? _parseDouble(json['preco_atacado'])
+          : null,
+      qtdMinimaAtacado: json['qtd_minima_atacado'] != null && json['qtd_minima_atacado'] != 0
+          ? _parseInt(json['qtd_minima_atacado'])
+          : null,
       margemLucro: _parseDouble(json['margem_lucro']),
       estoqueAtual: _parseInt(json['estoque_atual']),
       estoqueMinimo: _parseInt(json['estoque_minimo']),
@@ -138,6 +148,8 @@ class Produto {
     'tamanho': tamanho,
     'preco_custo': precoCusto,
     'preco_venda': precoVenda,
+    'preco_atacado': precoAtacado ?? 0,
+    'qtd_minima_atacado': qtdMinimaAtacado ?? 0,
     'estoque_atual': estoqueAtual,
     'estoque_minimo': estoqueMinimo,
     'is_combo': isCombo,

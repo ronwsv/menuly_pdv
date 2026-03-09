@@ -12,6 +12,7 @@ import '../../app/theme.dart';
 import '../../models/caixa.dart';
 import '../../models/caixa_movimento.dart';
 import '../../providers/caixas_provider.dart';
+import '../../providers/configuracoes_provider.dart';
 import '../../services/fechamento_receipt_service.dart';
 
 class CaixasScreen extends StatefulWidget {
@@ -1253,6 +1254,8 @@ class _FechamentoDialogState extends State<_FechamentoDialog> {
     final totalSaidas = _parseDouble(_dados!['total_saidas']);
     final saldoEsperado = _parseDouble(_dados!['saldo_esperado']);
 
+    final largura = int.tryParse(context.read<ConfiguracoesProvider>().getConfig('largura_cupom', '80')) ?? 80;
+
     final pdfBytes = await FechamentoReceiptService.generate(
       caixaNome: caixaNome,
       dataInicio: dateFmt.format(_dataInicio),
@@ -1263,6 +1266,7 @@ class _FechamentoDialogState extends State<_FechamentoDialog> {
       totalSaidas: totalSaidas,
       saldoEsperado: saldoEsperado,
       currencyFormat: fmt,
+      paperWidthMm: largura,
     );
 
     if (mounted) {
