@@ -59,7 +59,9 @@ class Usuario {
   final bool permServicos;
   final bool permOrdensServico;
   final bool permDevolucoes;
+  final bool permConsignacoes;
   final bool permRelatorios;
+  final double? comissaoPercentual;
   final bool ativo;
   final bool autoLogin;
 
@@ -84,7 +86,9 @@ class Usuario {
     this.permServicos = false,
     this.permOrdensServico = false,
     this.permDevolucoes = false,
+    this.permConsignacoes = false,
     this.permRelatorios = false,
+    this.comissaoPercentual,
     this.ativo = true,
     this.autoLogin = false,
   });
@@ -111,7 +115,11 @@ class Usuario {
       permServicos: _parseBool(json['perm_servicos']),
       permOrdensServico: _parseBool(json['perm_ordens_servico']),
       permDevolucoes: _parseBool(json['perm_devolucoes']),
+      permConsignacoes: _parseBool(json['perm_consignacoes']),
       permRelatorios: _parseBool(json['perm_relatorios']),
+      comissaoPercentual: json['comissao_percentual'] != null
+          ? _parseDouble(json['comissao_percentual'])
+          : null,
       ativo: json['ativo'] == 1 || json['ativo'] == '1' || json['ativo'] == true,
       autoLogin: _parseBool(json['auto_login']),
     );
@@ -137,7 +145,9 @@ class Usuario {
     'perm_servicos': permServicos,
     'perm_ordens_servico': permOrdensServico,
     'perm_devolucoes': permDevolucoes,
+    'perm_consignacoes': permConsignacoes,
     'perm_relatorios': permRelatorios,
+    'comissao_percentual': comissaoPercentual,
     'ativo': ativo,
     'auto_login': autoLogin,
   };

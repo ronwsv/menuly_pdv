@@ -21,6 +21,7 @@ import 'providers/ordens_servico_provider.dart';
 import 'providers/contas_pagar_provider.dart';
 import 'providers/crediario_provider.dart';
 import 'providers/devolucoes_provider.dart';
+import 'providers/consignacoes_provider.dart';
 import 'providers/backup_provider.dart';
 import 'providers/theme_provider.dart';
 import 'app/app.dart';
@@ -62,6 +63,7 @@ void main() async {
         ChangeNotifierProvider(create: (_) => ServicosProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => OrdensServicoProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => DevolucoesProvider(apiClient)),
+        ChangeNotifierProvider(create: (_) => ConsignacoesProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => BackupProvider(apiClient)),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
       ],

@@ -1,3 +1,5 @@
+import 'dart:convert';
+import '../../config/database.dart';
 import '../../core/exceptions/api_exception.dart';
 import 'vendas_repository.dart';
 import '../crediario/crediario_service.dart';
@@ -188,18 +190,42 @@ class VendasService {
 
         // Verificar estoque (para vendas, não para orçamentos)
         if (tipo == 'Venda') {
-          final estoqueAtual = int.parse(produto['estoque_atual'] ?? '0');
-          if (estoqueAtual < quantidade.toInt()) {
-            throw ValidationException(
-              'Estoque insuficiente para "${produto['descricao']}". '
-              'Disponível: $estoqueAtual',
-            );
+          final isCombo = produto['is_combo'] == '1';
+          if (isCombo) {
+            // For combos, check each component's stock
+            final comboItens =
+                await _repository.getComboItens(produtoIdInt);
+            for (final comp in comboItens) {
+              final compEstoque =
+                  int.parse(comp['estoque_atual'] ?? '0');
+              final needed =
+                  (double.parse(comp['quantidade'] ?? '1') *
+                          quantidade)
+                      .ceil();
+              if (compEstoque < needed) {
+                throw ValidationException(
+                  'Estoque insuficiente para "${comp['descricao']}" '
+                  '(componente do combo "${produto['descricao']}"). '
+                  'Disponível: $compEstoque, Necessário: $needed',
+                );
+              }
+            }
+          } else {
+            final estoqueAtual =
+                int.parse(produto['estoque_atual'] ?? '0');
+            if (estoqueAtual < quantidade.ceil()) {
+              throw ValidationException(
+                'Estoque insuficiente para "${produto['descricao']}". '
+                'Disponível: $estoqueAtual',
+              );
+            }
           }
         }
 
         final totalItem = (quantidade * precoUnitario) - descontoItem;
         itensProcessados.add({
           'produto_id': produtoIdInt,
+          'is_combo': produto['is_combo'] == '1',
           'quantidade': quantidade,
           'preco_unitario': precoUnitario,
           'desconto': descontoItem,
@@ -280,128 +306,177 @@ class VendasService {
       }
     }
 
-    // Gerar número da venda
-    final numero = await _repository.gerarNumero();
+    // === Seção transacional: todas as escritas no banco ===
+    return await Database.instance.transaction(() async {
+      // Gerar número da venda
+      final numero = await _repository.gerarNumero();
 
-    // Criar a venda
-    final valorRecebido = _parseDouble(data['valor_recebido']) ?? totalVenda;
-    final parteDinheiro = pagamentosList
-        .where((p) => p['forma_pagamento'] == 'dinheiro')
-        .fold<double>(0.0, (sum, p) => sum + ((p['valor'] as double?) ?? 0));
-    final troco = parteDinheiro > 0 && valorRecebido > parteDinheiro
-        ? valorRecebido - parteDinheiro
-        : 0.0;
+      // Criar a venda
+      final valorRecebido = _parseDouble(data['valor_recebido']) ?? totalVenda;
+      final parteDinheiro = pagamentosList
+          .where((p) => p['forma_pagamento'] == 'dinheiro')
+          .fold<double>(0.0, (sum, p) => sum + ((p['valor'] as double?) ?? 0));
+      final troco = parteDinheiro > 0 && valorRecebido > parteDinheiro
+          ? valorRecebido - parteDinheiro
+          : 0.0;
 
-    final vendaData = <String, String>{
-      'numero': numero,
-      'tipo': tipo,
-      'usuario_id': usuarioId.toString(),
-      'total_itens': itensProcessados.length.toString(),
-      'subtotal': subtotal.toStringAsFixed(2),
-      'desconto_percentual': descontoPercentual.toStringAsFixed(2),
-      'desconto_valor': descontoTotal.toStringAsFixed(2),
-      'total': totalVenda.toStringAsFixed(2),
-      'status': tipo == 'Venda' ? 'finalizada' : 'orcamento',
-    };
-
-    if (pagamentosList.isNotEmpty) {
-      vendaData['forma_pagamento'] = formaPagamentoResumo;
-    }
-    vendaData['valor_recebido'] = valorRecebido.toStringAsFixed(2);
-    vendaData['troco'] = troco.toStringAsFixed(2);
-
-    if (data['cliente_id'] != null) {
-      vendaData['cliente_id'] = data['cliente_id'].toString();
-    }
-    if (data['vendedor_id'] != null) {
-      vendaData['vendedor_id'] = data['vendedor_id'].toString();
-    }
-    if (data['observacoes'] != null) {
-      vendaData['observacoes'] = data['observacoes'].toString();
-    }
-
-    final vendaId = await _repository.create(vendaData);
-
-    // Criar itens da venda
-    for (final item in itensProcessados) {
-      final itemData = <String, String>{
-        'venda_id': vendaId.toString(),
-        'quantidade': (item['quantidade'] as double).toString(),
-        'preco_unitario': (item['preco_unitario'] as double).toStringAsFixed(2),
-        'desconto': (item['desconto'] as double).toStringAsFixed(2),
-        'total': (item['total'] as double).toStringAsFixed(2),
+      final vendaData = <String, String>{
+        'numero': numero,
+        'tipo': tipo,
+        'usuario_id': usuarioId.toString(),
+        'total_itens': itensProcessados.length.toString(),
+        'subtotal': subtotal.toStringAsFixed(2),
+        'desconto_percentual': descontoPercentual.toStringAsFixed(2),
+        'desconto_valor': descontoTotal.toStringAsFixed(2),
+        'total': totalVenda.toStringAsFixed(2),
+        'status': tipo == 'Venda' ? 'finalizada' : 'orcamento',
       };
 
-      if (item['produto_id'] != null) {
-        itemData['produto_id'] = item['produto_id'].toString();
+      if (pagamentosList.isNotEmpty) {
+        vendaData['forma_pagamento'] = formaPagamentoResumo;
       }
-      if (item['servico_id'] != null) {
-        itemData['servico_id'] = item['servico_id'].toString();
+      vendaData['valor_recebido'] = valorRecebido.toStringAsFixed(2);
+      vendaData['troco'] = troco.toStringAsFixed(2);
+
+      if (data['cliente_id'] != null) {
+        vendaData['cliente_id'] = data['cliente_id'].toString();
+      }
+      if (data['vendedor_id'] != null) {
+        vendaData['vendedor_id'] = data['vendedor_id'].toString();
+      }
+      if (data['observacoes'] != null) {
+        vendaData['observacoes'] = data['observacoes'].toString();
       }
 
-      await _repository.createItem(itemData);
+      final vendaId = await _repository.create(vendaData);
 
-      // Baixar estoque (apenas para vendas de produtos)
-      if (tipo == 'Venda' && item['produto_id'] != null) {
-        final qtd = (item['quantidade'] as double).toInt();
-        await _repository.atualizarEstoque(
-          item['produto_id'] as int,
-          qtd,
-        );
+      // Criar itens da venda
+      for (final item in itensProcessados) {
+        final itemData = <String, String>{
+          'venda_id': vendaId.toString(),
+          'quantidade': (item['quantidade'] as double).toString(),
+          'preco_unitario': (item['preco_unitario'] as double).toStringAsFixed(2),
+          'desconto': (item['desconto'] as double).toStringAsFixed(2),
+          'total': (item['total'] as double).toStringAsFixed(2),
+        };
 
-        // Registrar histórico de estoque
-        await _repository.registrarHistoricoEstoque({
-          'produto_id': item['produto_id'].toString(),
-          'tipo': 'saida',
-          'ocorrencia': 'venda',
-          'quantidade': qtd.toString(),
+        if (item['produto_id'] != null) {
+          itemData['produto_id'] = item['produto_id'].toString();
+        }
+        if (item['servico_id'] != null) {
+          itemData['servico_id'] = item['servico_id'].toString();
+        }
+
+        // For combos, snapshot components at sale time for correct cancellation
+        List<Map<String, String?>>? comboItens;
+        if (tipo == 'Venda' && item['is_combo'] == true && item['produto_id'] != null) {
+          comboItens = await _repository.getComboItens(item['produto_id'] as int);
+          itemData['combo_snapshot'] = jsonEncode(comboItens.map((c) => {
+            'produto_id': c['produto_id'],
+            'quantidade': c['quantidade'],
+          }).toList());
+        }
+
+        await _repository.createItem(itemData);
+
+        // Baixar estoque (apenas para vendas de produtos)
+        if (tipo == 'Venda' && item['produto_id'] != null) {
+          final qtd = (item['quantidade'] as double).ceil();
+          final isCombo = item['is_combo'] == true;
+
+          if (isCombo && comboItens != null) {
+            for (final comp in comboItens) {
+              final compQtd =
+                  (double.parse(comp['quantidade'] ?? '1') * qtd).ceil();
+              final compId = int.parse(comp['produto_id']!);
+              await _repository.atualizarEstoque(compId, compQtd);
+              await _repository.registrarHistoricoEstoque({
+                'produto_id': compId.toString(),
+                'tipo': 'saida',
+                'ocorrencia': 'venda_combo',
+                'quantidade': compQtd.toString(),
+                'referencia_id': vendaId.toString(),
+                'referencia_tipo': 'venda',
+                'usuario_id': usuarioId.toString(),
+              });
+            }
+          } else if (!isCombo) {
+            await _repository.atualizarEstoque(
+              item['produto_id'] as int,
+              qtd,
+            );
+            await _repository.registrarHistoricoEstoque({
+              'produto_id': item['produto_id'].toString(),
+              'tipo': 'saida',
+              'ocorrencia': 'venda',
+              'quantidade': qtd.toString(),
+              'referencia_id': vendaId.toString(),
+              'referencia_tipo': 'venda',
+              'usuario_id': usuarioId.toString(),
+            });
+          }
+        }
+      }
+
+      // Registrar pagamentos na tabela venda_pagamentos
+      if (tipo == 'Venda') {
+        for (final pag in pagamentosList) {
+          await _repository.createPagamento({
+            'venda_id': vendaId.toString(),
+            'forma_pagamento': pag['forma_pagamento'] as String,
+            'valor': (pag['valor'] as double).toStringAsFixed(2),
+          });
+        }
+      }
+
+      // Registrar movimento no caixa (apenas para vendas)
+      if (tipo == 'Venda') {
+        final caixaId = await _repository.buscarCaixaAberto();
+        await _repository.registrarMovimentoCaixa({
+          'caixa_id': caixaId.toString(),
+          'descricao': 'Venda #$numero',
+          'valor': totalVenda.toStringAsFixed(2),
+          'tipo': 'entrada',
+          'categoria': 'venda',
           'referencia_id': vendaId.toString(),
           'referencia_tipo': 'venda',
           'usuario_id': usuarioId.toString(),
         });
+
+        await _repository.atualizarSaldoCaixa(caixaId, totalVenda);
       }
-    }
 
-    // Registrar pagamentos na tabela venda_pagamentos
-    if (tipo == 'Venda') {
-      for (final pag in pagamentosList) {
-        await _repository.createPagamento({
-          'venda_id': vendaId.toString(),
-          'forma_pagamento': pag['forma_pagamento'] as String,
-          'valor': (pag['valor'] as double).toStringAsFixed(2),
-        });
+      // Registrar comissão do vendedor
+      if (tipo == 'Venda' && data['vendedor_id'] != null) {
+        final vendedorId = _parseInt(data['vendedor_id'])!;
+        var percentual = await _repository.buscarPercentualVendedor(vendedorId);
+        percentual ??= await _repository.buscarPercentualPadrao();
+        if (percentual > 0) {
+          final valorComissao = totalVenda * percentual / 100;
+          await _repository.criarComissao({
+            'venda_id': vendaId.toString(),
+            'vendedor_id': vendedorId.toString(),
+            'valor_venda': totalVenda.toStringAsFixed(2),
+            'percentual': percentual.toStringAsFixed(2),
+            'valor_comissao': valorComissao.toStringAsFixed(2),
+          });
+        }
       }
-    }
 
-    // Registrar movimento no caixa (apenas para vendas)
-    if (tipo == 'Venda') {
-      await _repository.registrarMovimentoCaixa({
-        'caixa_id': '1',
-        'descricao': 'Venda #$numero',
-        'valor': totalVenda.toStringAsFixed(2),
-        'tipo': 'entrada',
-        'categoria': 'venda',
-        'referencia_id': vendaId.toString(),
-        'referencia_tipo': 'venda',
-        'usuario_id': usuarioId.toString(),
-      });
+      // Gerar parcelas do crediário
+      if (tipo == 'Venda' && temCrediario) {
+        final clienteId = _parseInt(data['cliente_id'])!;
+        final numeroParcelas = _parseInt(data['crediario_parcelas'])!;
+        await _crediarioService!.gerarParcelas(
+          vendaId: vendaId,
+          clienteId: clienteId,
+          totalVenda: totalVenda,
+          numeroParcelas: numeroParcelas,
+        );
+      }
 
-      await _repository.atualizarSaldoCaixa(1, totalVenda);
-    }
-
-    // Gerar parcelas do crediário
-    if (tipo == 'Venda' && temCrediario) {
-      final clienteId = _parseInt(data['cliente_id'])!;
-      final numeroParcelas = _parseInt(data['crediario_parcelas'])!;
-      await _crediarioService!.gerarParcelas(
-        vendaId: vendaId,
-        clienteId: clienteId,
-        totalVenda: totalVenda,
-        numeroParcelas: numeroParcelas,
-      );
-    }
-
-    return await obterPorId(vendaId);
+      return await obterPorId(vendaId);
+    });
   }
 
   Future<void> cancelar(int id, int usuarioId) async {
@@ -413,50 +488,105 @@ class VendasService {
       throw ValidationException('Venda já está cancelada');
     }
 
-    // Reverter estoque se era venda finalizada
-    if (venda.status == 'finalizada') {
-      final itens = await _repository.findItensByVendaId(id);
-      for (final item in itens) {
-        if (item.produtoId != null) {
-          // Devolver ao estoque (negativo = soma)
-          await _repository.atualizarEstoque(
-            item.produtoId!,
-            -(item.quantidade.toInt()),
-          );
+    await Database.instance.transaction(() async {
+      // Reverter estoque se era venda finalizada
+      if (venda.status == 'finalizada') {
+        final itens = await _repository.findItensByVendaId(id);
+        for (final item in itens) {
+          if (item.produtoId != null) {
+            // Use combo_snapshot if available (saved at sale time)
+            if (item.comboSnapshot != null && item.comboSnapshot!.isNotEmpty) {
+              // Restore stock using the snapshot from sale time
+              final snapshot = jsonDecode(item.comboSnapshot!) as List;
+              for (final comp in snapshot) {
+                final compQtd =
+                    (double.parse(comp['quantidade']?.toString() ?? '1') *
+                            item.quantidade.ceil())
+                        .ceil();
+                final compId = int.parse(comp['produto_id'].toString());
+                await _repository.atualizarEstoque(compId, -compQtd);
+                await _repository.registrarHistoricoEstoque({
+                  'produto_id': compId.toString(),
+                  'tipo': 'entrada',
+                  'ocorrencia': 'cancelamento_venda_combo',
+                  'quantidade': compQtd.toString(),
+                  'referencia_id': id.toString(),
+                  'referencia_tipo': 'cancelamento_venda',
+                  'usuario_id': usuarioId.toString(),
+                });
+              }
+            } else {
+              // Regular product or legacy combo without snapshot
+              final produto = await _repository.getProduto(item.produtoId!);
+              final isCombo = produto != null && produto['is_combo'] == '1';
 
-          await _repository.registrarHistoricoEstoque({
-            'produto_id': item.produtoId.toString(),
-            'tipo': 'entrada',
-            'ocorrencia': 'cancelamento_venda',
-            'quantidade': item.quantidade.toInt().toString(),
-            'referencia_id': id.toString(),
-            'referencia_tipo': 'cancelamento_venda',
-            'usuario_id': usuarioId.toString(),
-          });
+              if (isCombo) {
+                // Fallback: use current combo composition (legacy behavior)
+                final comboItens =
+                    await _repository.getComboItens(item.produtoId!);
+                for (final comp in comboItens) {
+                  final compQtd =
+                      (double.parse(comp['quantidade'] ?? '1') *
+                              item.quantidade.ceil())
+                          .ceil();
+                  final compId = int.parse(comp['produto_id']!);
+                  await _repository.atualizarEstoque(compId, -compQtd);
+                  await _repository.registrarHistoricoEstoque({
+                    'produto_id': compId.toString(),
+                    'tipo': 'entrada',
+                    'ocorrencia': 'cancelamento_venda_combo',
+                    'quantidade': compQtd.toString(),
+                    'referencia_id': id.toString(),
+                    'referencia_tipo': 'cancelamento_venda',
+                    'usuario_id': usuarioId.toString(),
+                  });
+                }
+              } else {
+                // Devolver ao estoque (negativo = soma)
+                await _repository.atualizarEstoque(
+                  item.produtoId!,
+                  -(item.quantidade.ceil()),
+                );
+                await _repository.registrarHistoricoEstoque({
+                  'produto_id': item.produtoId.toString(),
+                  'tipo': 'entrada',
+                  'ocorrencia': 'cancelamento_venda',
+                  'quantidade': item.quantidade.ceil().toString(),
+                  'referencia_id': id.toString(),
+                  'referencia_tipo': 'cancelamento_venda',
+                  'usuario_id': usuarioId.toString(),
+                });
+              }
+            }
+          }
         }
+
+        // Reverter movimento no caixa
+        final caixaId = await _repository.buscarCaixaAberto();
+        await _repository.registrarMovimentoCaixa({
+          'caixa_id': caixaId.toString(),
+          'descricao': 'Cancelamento Venda #${venda.numero}',
+          'valor': venda.total.toStringAsFixed(2),
+          'tipo': 'saida',
+          'categoria': 'cancelamento_venda',
+          'referencia_id': id.toString(),
+          'referencia_tipo': 'cancelamento_venda',
+          'usuario_id': usuarioId.toString(),
+        });
+
+        await _repository.atualizarSaldoCaixa(caixaId, -venda.total);
       }
 
-      // Reverter movimento no caixa
-      await _repository.registrarMovimentoCaixa({
-        'caixa_id': '1',
-        'descricao': 'Cancelamento Venda #${venda.numero}',
-        'valor': venda.total.toStringAsFixed(2),
-        'tipo': 'saida',
-        'categoria': 'cancelamento_venda',
-        'referencia_id': id.toString(),
-        'referencia_tipo': 'cancelamento_venda',
-        'usuario_id': usuarioId.toString(),
-      });
+      await _repository.updateStatus(id, 'cancelada');
 
-      await _repository.atualizarSaldoCaixa(1, -venda.total);
-    }
+      // Cancelar comissões associadas
+      await _repository.cancelarComissaoPorVenda(id);
 
-    await _repository.updateStatus(id, 'cancelada');
-
-    // Cancelar parcelas do crediário se houver
-    if (_crediarioService != null) {
-      await _crediarioService?.cancelarParcelasVenda(id);
-    }
+      // Cancelar parcelas do crediário se houver
+      if (_crediarioService != null) {
+        await _crediarioService.cancelarParcelasVenda(id);
+      }
+    });
   }
 
   Future<Map<String, dynamic>> converterOrcamento(
@@ -510,6 +640,67 @@ class VendasService {
     }
 
     return await criarVenda(vendaData, usuarioId);
+  }
+
+  Future<Map<String, dynamic>> listarComissoes(Map<String, dynamic> params) async {
+    final vendedorId = params['vendedor_id'] as int?;
+    final dataInicio = params['data_inicio'] as String?;
+    final dataFim = params['data_fim'] as String?;
+    final status = params['status'] as String?;
+    final limit = params['limit'] as int? ?? 50;
+    final offset = params['offset'] as int? ?? 0;
+
+    final rows = await _repository.buscarComissoes(
+      vendedorId: vendedorId,
+      dataInicio: dataInicio,
+      dataFim: dataFim,
+      status: status,
+      limit: limit,
+      offset: offset,
+    );
+
+    final total = await _repository.countComissoes(
+      vendedorId: vendedorId,
+      dataInicio: dataInicio,
+      dataFim: dataFim,
+      status: status,
+    );
+
+    final items = rows.map((r) => {
+      'id': int.tryParse(r['id'] ?? ''),
+      'venda_id': int.tryParse(r['venda_id'] ?? ''),
+      'venda_numero': r['venda_numero'],
+      'vendedor_id': int.tryParse(r['vendedor_id'] ?? ''),
+      'vendedor_nome': r['vendedor_nome'],
+      'valor_venda': double.tryParse(r['valor_venda'] ?? '0') ?? 0,
+      'percentual': double.tryParse(r['percentual'] ?? '0') ?? 0,
+      'valor_comissao': double.tryParse(r['valor_comissao'] ?? '0') ?? 0,
+      'status': r['status'],
+      'criado_em': r['criado_em'],
+    }).toList();
+
+    return {'items': items, 'total': total};
+  }
+
+  Future<List<Map<String, dynamic>>> resumoComissoes(Map<String, dynamic> params) async {
+    final vendedorId = params['vendedor_id'] as int?;
+    final dataInicio = params['data_inicio'] as String?;
+    final dataFim = params['data_fim'] as String?;
+
+    final rows = await _repository.buscarResumoComissoes(
+      vendedorId: vendedorId,
+      dataInicio: dataInicio,
+      dataFim: dataFim,
+    );
+
+    return rows.map((r) => <String, dynamic>{
+      'vendedor_id': int.tryParse(r['vendedor_id'] ?? ''),
+      'vendedor_nome': r['vendedor_nome'],
+      'total_vendas': int.tryParse(r['total_vendas'] ?? '0') ?? 0,
+      'total_vendido': double.tryParse(r['total_vendido'] ?? '0') ?? 0,
+      'total_comissao': double.tryParse(r['total_comissao'] ?? '0') ?? 0,
+      'percentual_medio': double.tryParse(r['percentual_medio'] ?? '0') ?? 0,
+    }).toList();
   }
 
   double? _parseDouble(dynamic value) {

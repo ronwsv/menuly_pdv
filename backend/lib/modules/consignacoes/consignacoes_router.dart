@@ -2,9 +2,9 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../../core/middleware/auth_middleware.dart';
-import 'vendas_controller.dart';
+import 'consignacoes_controller.dart';
 
-Router vendasRouter(VendasController controller) {
+Router consignacoesRouter(ConsignacoesController controller) {
   final router = Router();
   final auth = authMiddleware();
 
@@ -12,21 +12,6 @@ Router vendasRouter(VendasController controller) {
     '/',
     Pipeline().addMiddleware(auth).addHandler(
           (Request req) => controller.listar(req),
-        ),
-  );
-
-  // Comissões routes must come BEFORE /<id> to avoid being caught by the wildcard
-  router.get(
-    '/comissoes',
-    Pipeline().addMiddleware(auth).addHandler(
-          (Request req) => controller.listarComissoes(req),
-        ),
-  );
-
-  router.get(
-    '/comissoes/resumo',
-    Pipeline().addMiddleware(auth).addHandler(
-          (Request req) => controller.resumoComissoes(req),
         ),
   );
 
@@ -45,16 +30,16 @@ Router vendasRouter(VendasController controller) {
   );
 
   router.post(
-    '/<id>/cancelar',
+    '/<id>/acerto',
     Pipeline().addMiddleware(auth).addHandler(
-          (Request req) => controller.cancelar(req),
+          (Request req) => controller.registrarAcerto(req),
         ),
   );
 
   router.post(
-    '/<id>/converter',
+    '/<id>/cancelar',
     Pipeline().addMiddleware(auth).addHandler(
-          (Request req) => controller.converterOrcamento(req),
+          (Request req) => controller.cancelar(req),
         ),
   );
 

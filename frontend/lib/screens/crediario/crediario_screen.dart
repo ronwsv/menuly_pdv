@@ -286,25 +286,39 @@ class _CrediarioScreenState extends State<CrediarioScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      child: SizedBox(
-        width: double.infinity,
-        child: DataTable(
-          headingRowColor:
-              WidgetStateProperty.all(AppTheme.scaffoldBackground),
-          dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
-          border: TableBorder.all(color: AppTheme.border, width: 0.5),
-          columns: [
-            DataColumn(label: Text('Parcela')),
-            DataColumn(label: Text('Cliente')),
-            DataColumn(label: Text('Venda')),
-            DataColumn(label: Text('Vencimento')),
-            DataColumn(label: Text('Valor'), numeric: true),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Pagamento')),
-            DataColumn(label: Text('Acoes')),
-          ],
-          rows: provider.parcelas.map((p) => _buildRow(p)).toList(),
+    final verticalController = ScrollController();
+    final horizontalController = ScrollController();
+    return Scrollbar(
+      controller: verticalController,
+      thumbVisibility: true,
+      child: Scrollbar(
+        controller: horizontalController,
+        thumbVisibility: true,
+        notificationPredicate: (notification) => notification.depth == 1,
+        child: SingleChildScrollView(
+          controller: verticalController,
+          child: SingleChildScrollView(
+            controller: horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor:
+                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
+              dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+              border: TableBorder.all(color: AppTheme.border, width: 0.5),
+              columnSpacing: 24,
+              columns: [
+                DataColumn(label: Text('Parcela')),
+                DataColumn(label: Text('Cliente')),
+                DataColumn(label: Text('Venda')),
+                DataColumn(label: Text('Vencimento')),
+                DataColumn(label: Text('Valor'), numeric: true),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Pagamento')),
+                DataColumn(label: Text('Acoes')),
+              ],
+              rows: provider.parcelas.map((p) => _buildRow(p)).toList(),
+            ),
+          ),
         ),
       ),
     );
@@ -329,9 +343,16 @@ class _CrediarioScreenState extends State<CrediarioScreen> {
           fontWeight: FontWeight.w600,
         ),
       )),
-      DataCell(Text(
-        parcela.clienteNome ?? '-',
-        style: TextStyle(color: AppTheme.textPrimary),
+      DataCell(Tooltip(
+        message: parcela.clienteNome ?? '-',
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 180),
+          child: Text(
+            parcela.clienteNome ?? '-',
+            style: TextStyle(color: AppTheme.textPrimary),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       )),
       DataCell(Text(
         parcela.vendaNumero ?? '#${parcela.vendaId}',

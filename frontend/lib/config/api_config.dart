@@ -20,6 +20,7 @@ class ApiConfig {
   static String produtoInativar(int id) => '$produtos/$id/inativar';
   static String produtoBloquear(int id) => '$produtos/$id/bloquear';
   static String produtoImagem(int id) => '$produtos/$id/imagem';
+  static String produtoComboItens(int id) => '$produtos/$id/combo-itens';
   static const String produtosImportar = '$produtos/importar';
   static const String produtosBatchEstoqueMinimo = '$produtos/batch/estoque-minimo';
   static const String produtosBatchMargem = '$produtos/batch/margem';
@@ -64,6 +65,7 @@ class ApiConfig {
   // Compras
   static const String compras = '$baseUrl/compras';
   static String compraById(int id) => '$compras/$id';
+  static const String comprasImportarXml = '$compras/importar-xml';
 
   // Contas a Receber
   static const String contasReceber = '$baseUrl/contas-receber';
@@ -110,6 +112,16 @@ class ApiConfig {
   static const String creditosTotais = '$baseUrl/devolucoes/creditos/totais';
   static String creditosCliente(int clienteId) => '$devolucoes/creditos/cliente/$clienteId';
   static String creditoUtilizar(int id) => '$devolucoes/creditos/$id/utilizar';
+
+  // Comissoes
+  static const String comissoes = '$baseUrl/vendas/comissoes';
+  static const String comissoesResumo = '$baseUrl/vendas/comissoes/resumo';
+
+  // Consignacoes
+  static const String consignacoes = '$baseUrl/consignacoes';
+  static String consignacaoById(int id) => '$consignacoes/$id';
+  static String consignacaoAcerto(int id) => '$consignacoes/$id/acerto';
+  static String consignacaoCancelar(int id) => '$consignacoes/$id/cancelar';
 
   // Gaveta de dinheiro (ESC/POS via impressora térmica)
   static const String gavetaAbrir = '$baseUrl/gaveta/abrir';

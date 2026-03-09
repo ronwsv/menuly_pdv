@@ -580,6 +580,7 @@ class _UsuariosTab extends StatelessWidget {
                             if (u.permServicos) permissoes.add('Servicos');
                             if (u.permOrdensServico) permissoes.add('OS');
                             if (u.permDevolucoes) permissoes.add('Devolucoes');
+                            if (u.permConsignacoes) permissoes.add('Consignacoes');
                             if (u.permRelatorios) permissoes.add('Relatorios');
 
                             return DataRow(cells: [
@@ -722,6 +723,7 @@ class _SistemaTabState extends State<_SistemaTab> {
   final _impressoraCtrl = TextEditingController();
   final _casasDecimaisCtrl = TextEditingController();
   final _moedaCtrl = TextEditingController();
+  final _comissaoPadraoCtrl = TextEditingController();
   String _impressaoCupom = 'perguntar';
   bool _saving = false;
 
@@ -743,6 +745,7 @@ class _SistemaTabState extends State<_SistemaTab> {
     _impressoraCtrl.text = configs['impressora_padrao'] ?? '';
     _casasDecimaisCtrl.text = configs['casas_decimais'] ?? '2';
     _moedaCtrl.text = configs['moeda'] ?? 'BRL';
+    _comissaoPadraoCtrl.text = configs['comissao_percentual_padrao'] ?? '0';
     _impressaoCupom = configs['impressao_cupom'] ?? 'perguntar';
   }
 
@@ -751,6 +754,7 @@ class _SistemaTabState extends State<_SistemaTab> {
     _impressoraCtrl.dispose();
     _casasDecimaisCtrl.dispose();
     _moedaCtrl.dispose();
+    _comissaoPadraoCtrl.dispose();
     super.dispose();
   }
 
@@ -765,6 +769,8 @@ class _SistemaTabState extends State<_SistemaTab> {
           'casas_decimais', _casasDecimaisCtrl.text.trim());
       await provider.salvarConfig('moeda', _moedaCtrl.text.trim());
       await provider.salvarConfig('impressao_cupom', _impressaoCupom);
+      await provider.salvarConfig(
+          'comissao_percentual_padrao', _comissaoPadraoCtrl.text.trim());
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -797,6 +803,7 @@ class _SistemaTabState extends State<_SistemaTab> {
           _impressoraCtrl.text = configs['impressora_padrao'] ?? '';
           _casasDecimaisCtrl.text = configs['casas_decimais'] ?? '2';
           _moedaCtrl.text = configs['moeda'] ?? 'BRL';
+          _comissaoPadraoCtrl.text = configs['comissao_percentual_padrao'] ?? '0';
           _impressaoCupom = configs['impressao_cupom'] ?? 'perguntar';
         }
 
@@ -858,6 +865,41 @@ class _SistemaTabState extends State<_SistemaTab> {
                     ),
                   ],
                 ),
+                SizedBox(height: 20),
+
+                // Comissão section
+                Text(
+                  'Vendas',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Percentual padrao de comissao para vendedores sem valor individual',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: AppTheme.textSecondary,
+                  ),
+                ),
+                SizedBox(height: 12),
+                TextFormField(
+                  controller: _comissaoPadraoCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Comissao Padrao (%)',
+                    prefixIcon: Icon(Icons.percent,
+                        color: AppTheme.textSecondary, size: 20),
+                  ),
+                  style: TextStyle(
+                      color: AppTheme.textPrimary, fontSize: 14),
+                  keyboardType: TextInputType.numberWithOptions(decimal: true),
+                  inputFormatters: [
+                    FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                  ],
+                ),
+
                 SizedBox(height: 20),
 
                 // Impressao section
@@ -961,7 +1003,9 @@ class _UserFormDialogState extends State<_UserFormDialog> {
   bool _permServicos = false;
   bool _permOrdensServico = false;
   bool _permDevolucoes = false;
+  bool _permConsignacoes = false;
   bool _permRelatorios = false;
+  late TextEditingController _comissaoCtrl;
   bool _ativo = true;
   bool _saving = false;
 
@@ -995,7 +1039,11 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _permServicos = u?.permServicos ?? false;
     _permOrdensServico = u?.permOrdensServico ?? false;
     _permDevolucoes = u?.permDevolucoes ?? false;
+    _permConsignacoes = u?.permConsignacoes ?? false;
     _permRelatorios = u?.permRelatorios ?? false;
+    _comissaoCtrl = TextEditingController(
+      text: u?.comissaoPercentual != null ? u!.comissaoPercentual!.toString() : '',
+    );
     _ativo = u?.ativo ?? true;
   }
 
@@ -1005,6 +1053,7 @@ class _UserFormDialogState extends State<_UserFormDialog> {
     _loginCtrl.dispose();
     _senhaCtrl.dispose();
     _maxDescontoCtrl.dispose();
+    _comissaoCtrl.dispose();
     super.dispose();
   }
 
@@ -1032,10 +1081,18 @@ class _UserFormDialogState extends State<_UserFormDialog> {
       'perm_servicos': _permServicos,
       'perm_ordens_servico': _permOrdensServico,
       'perm_devolucoes': _permDevolucoes,
+      'perm_consignacoes': _permConsignacoes,
       'perm_relatorios': _permRelatorios,
       'max_desconto': double.tryParse(_maxDescontoCtrl.text.trim()) ?? 0,
       'ativo': _ativo,
     };
+
+    final comissaoText = _comissaoCtrl.text.trim();
+    if (comissaoText.isNotEmpty) {
+      data['comissao_percentual'] = double.tryParse(comissaoText) ?? 0;
+    } else {
+      data['comissao_percentual'] = null;
+    }
 
     if (_senhaCtrl.text.isNotEmpty) {
       data['senha'] = _senhaCtrl.text;
@@ -1163,6 +1220,23 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                       FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
                     ],
                   ),
+                  SizedBox(height: 12),
+
+                  // Comissão
+                  TextFormField(
+                    controller: _comissaoCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Comissao (%)',
+                      hintText: 'Vazio = usar padrao global',
+                    ),
+                    style: TextStyle(
+                        color: AppTheme.textPrimary, fontSize: 14),
+                    keyboardType:
+                        const TextInputType.numberWithOptions(decimal: true),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(RegExp(r'[\d.]')),
+                    ],
+                  ),
                   SizedBox(height: 16),
 
                   // Permissions
@@ -1218,6 +1292,8 @@ class _UserFormDialogState extends State<_UserFormDialog> {
                           (v) => setState(() => _permOrdensServico = v ?? false)),
                       _buildCheckbox('Trocas e Devolucoes', _permDevolucoes,
                           (v) => setState(() => _permDevolucoes = v ?? false)),
+                      _buildCheckbox('Consignacoes', _permConsignacoes,
+                          (v) => setState(() => _permConsignacoes = v ?? false)),
                       _buildCheckbox('Relatorios', _permRelatorios,
                           (v) => setState(() => _permRelatorios = v ?? false)),
                     ],

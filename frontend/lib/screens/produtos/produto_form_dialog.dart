@@ -38,6 +38,7 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
   late final TextEditingController _ncmCtrl;
   late final TextEditingController _tributacaoCtrl;
   late final TextEditingController _detalhesCtrl;
+  late final TextEditingController _tamanhoCtrl;
 
   int? _categoriaId;
   int? _fornecedorId;
@@ -45,16 +46,21 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
   bool _saving = false;
   List<Fornecedor> _fornecedores = [];
 
+  // Combo state
+  bool _isCombo = false;
+  List<_ComboComponente> _comboComponentes = [];
+
   // Image state
   Uint8List? _imageBytes;
   bool _hasNewImage = false;
   bool _compressing = false;
 
-  static const _unidades = [
-    'un', 'par', 'dz', 'kit', 'cx', 'pct', 'fd',
+  static const _unidadesBase = [
+    'un', 'pc', 'par', 'dz', 'kit', 'cx', 'pct', 'fd',
     'kg', 'g', 'l', 'ml', 'm', 'm2', 'm3', 'cm',
     'rl', 'gl', 'jg', 'ct', 'sc', 'tb', 'lt',
   ];
+  late final List<String> _unidades;
 
   bool get _isEditing => widget.produto != null;
 
@@ -80,10 +86,52 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
     _ncmCtrl = TextEditingController(text: p?.ncmCode ?? '');
     _tributacaoCtrl = TextEditingController(text: p?.tributacao ?? '');
     _detalhesCtrl = TextEditingController(text: p?.detalhes ?? '');
+    _tamanhoCtrl = TextEditingController(text: p?.tamanho ?? '');
     _categoriaId = p?.categoriaId;
     _fornecedorId = p?.fornecedorId;
     _unidade = p?.unidade ?? 'un';
-    WidgetsBinding.instance.addPostFrameCallback((_) => _loadFornecedores());
+    // Garantir que a unidade do produto esteja na lista de opções
+    if (_unidadesBase.contains(_unidade)) {
+      _unidades = _unidadesBase;
+    } else {
+      _unidades = [_unidade, ..._unidadesBase];
+    }
+    _isCombo = p?.isCombo ?? false;
+    if (_isCombo && p?.comboItens != null) {
+      _comboComponentes = p!.comboItens!
+          .map((ci) => _ComboComponente(
+                produtoId: ci.produtoId,
+                descricao: ci.descricao,
+                quantidade: ci.quantidade,
+                precoVenda: ci.precoVenda,
+              ))
+          .toList();
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFornecedores();
+      if (_isCombo && _comboComponentes.isEmpty && p != null) {
+        _loadComboItens(p.id);
+      }
+    });
+  }
+
+  Future<void> _loadComboItens(int produtoId) async {
+    try {
+      final provider = context.read<ProdutosProvider>();
+      final itens = await provider.carregarComboItens(produtoId);
+      if (mounted) {
+        setState(() {
+          _comboComponentes = itens
+              .map((ci) => _ComboComponente(
+                    produtoId: ci.produtoId,
+                    descricao: ci.descricao,
+                    quantidade: ci.quantidade,
+                    precoVenda: ci.precoVenda,
+                  ))
+              .toList();
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadFornecedores() async {
@@ -108,6 +156,7 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
     _ncmCtrl.dispose();
     _tributacaoCtrl.dispose();
     _detalhesCtrl.dispose();
+    _tamanhoCtrl.dispose();
     super.dispose();
   }
 
@@ -189,10 +238,16 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
           : _tributacaoCtrl.text.trim(),
       'fornecedor_id': _fornecedorId,
       'unidade': _unidade,
+      'tamanho': _tamanhoCtrl.text.trim().isEmpty ? null : _tamanhoCtrl.text.trim(),
       'preco_custo': double.tryParse(_precoCustoCtrl.text.trim()) ?? 0,
       'preco_venda': double.tryParse(_precoVendaCtrl.text.trim()) ?? 0,
-      'estoque_atual': int.tryParse(_estoqueAtualCtrl.text.trim()) ?? 0,
-      'estoque_minimo': int.tryParse(_estoqueMinimoCtrl.text.trim()) ?? 0,
+      'estoque_atual': _isCombo ? 0 : (int.tryParse(_estoqueAtualCtrl.text.trim()) ?? 0),
+      'estoque_minimo': _isCombo ? 0 : (int.tryParse(_estoqueMinimoCtrl.text.trim()) ?? 0),
+      'is_combo': _isCombo,
+      if (_isCombo)
+        'combo_itens': _comboComponentes
+            .map((c) => {'produto_id': c.produtoId, 'quantidade': c.quantidade})
+            .toList(),
     };
 
     try {
@@ -234,7 +289,7 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
         side: BorderSide(color: AppTheme.border),
       ),
       child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: 700, maxHeight: 620),
+        constraints: BoxConstraints(maxWidth: 700, maxHeight: _isCombo ? 750 : 620),
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Form(
@@ -346,15 +401,27 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
         ),
         SizedBox(height: 12),
 
-        // Categoria + Unidade
+        // Categoria + Unidade + Tamanho
         Row(
           children: [
             Expanded(
+              flex: 2,
               child: _buildCategoriaField(provider),
             ),
             SizedBox(width: 12),
             Expanded(
               child: _buildUnidadeField(),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: TextFormField(
+                controller: _tamanhoCtrl,
+                decoration: InputDecoration(
+                  labelText: 'Tamanho',
+                  hintText: 'P, M, G, 42...',
+                  hintStyle: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+              ),
             ),
           ],
         ),
@@ -362,6 +429,14 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
 
         // Fornecedor
         _buildFornecedorField(),
+        SizedBox(height: 12),
+
+        // Combo toggle
+        _buildComboToggle(),
+        if (_isCombo) ...[
+          SizedBox(height: 12),
+          _buildComboComponentes(),
+        ],
         SizedBox(height: 12),
 
         // Preco Custo + Preco Venda + Margem
@@ -437,8 +512,8 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
         }),
         SizedBox(height: 12),
 
-        // Estoque Atual + Estoque Minimo
-        Row(
+        // Estoque Atual + Estoque Minimo (hidden for combos)
+        if (!_isCombo) Row(
           children: [
             Expanded(
               child: TextFormField(
@@ -764,6 +839,273 @@ class _ProdutoFormDialogState extends State<ProdutoFormDialog> {
           style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
         ),
       ],
+    );
+  }
+
+  Widget _buildComboToggle() {
+    return Row(
+      children: [
+        Switch(
+          value: _isCombo,
+          activeColor: AppTheme.accent,
+          onChanged: (v) => setState(() => _isCombo = v),
+        ),
+        SizedBox(width: 8),
+        Text(
+          'Este produto e um combo/kit',
+          style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+        ),
+        if (_isCombo && _comboComponentes.isNotEmpty) ...[
+          Spacer(),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: AppTheme.accent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+            ),
+            child: Text(
+              'Soma: R\$ ${_somaComponentes().toStringAsFixed(2)}',
+              style: TextStyle(fontSize: 12, color: AppTheme.accent, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  double _somaComponentes() {
+    return _comboComponentes.fold(0.0, (sum, c) => sum + (c.precoVenda * c.quantidade));
+  }
+
+  Widget _buildComboComponentes() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.inputFill,
+        border: Border.all(color: AppTheme.border),
+        borderRadius: BorderRadius.circular(AppTheme.radiusMd),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.inventory_2_outlined, size: 16, color: AppTheme.accent),
+              SizedBox(width: 6),
+              Text(
+                'Componentes do Combo',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+              ),
+              Spacer(),
+              InkWell(
+                onTap: _adicionarComponente,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                    border: Border.all(color: AppTheme.primary.withOpacity(0.3)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.add, size: 14, color: AppTheme.accent),
+                      SizedBox(width: 4),
+                      Text('Adicionar', style: TextStyle(fontSize: 12, color: AppTheme.accent)),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (_comboComponentes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(
+                child: Text(
+                  'Nenhum componente adicionado',
+                  style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                ),
+              ),
+            )
+          else ...[
+            SizedBox(height: 8),
+            ..._comboComponentes.asMap().entries.map((entry) {
+              final idx = entry.key;
+              final comp = entry.value;
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        comp.descricao,
+                        style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    SizedBox(
+                      width: 60,
+                      height: 30,
+                      child: TextFormField(
+                        initialValue: comp.quantidade.toStringAsFixed(comp.quantidade == comp.quantidade.toInt() ? 0 : 1),
+                        style: TextStyle(fontSize: 12, color: AppTheme.textPrimary),
+                        textAlign: TextAlign.center,
+                        decoration: InputDecoration(
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                          isDense: true,
+                        ),
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (v) {
+                          final qty = double.tryParse(v);
+                          if (qty != null && qty > 0) {
+                            setState(() => _comboComponentes[idx] = comp.copyWith(quantidade: qty));
+                          }
+                        },
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'R\$ ${(comp.precoVenda * comp.quantidade).toStringAsFixed(2)}',
+                      style: TextStyle(fontSize: 12, color: AppTheme.textSecondary),
+                    ),
+                    SizedBox(width: 4),
+                    InkWell(
+                      onTap: () => setState(() => _comboComponentes.removeAt(idx)),
+                      child: Icon(Icons.close, size: 16, color: AppTheme.error),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Future<void> _adicionarComponente() async {
+    final api = context.read<ProdutosProvider>().api;
+    final searchCtrl = TextEditingController();
+    List<Produto> resultados = [];
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: AppTheme.cardSurface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusLg),
+            side: BorderSide(color: AppTheme.border),
+          ),
+          title: Text(
+            'Buscar Produto',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: AppTheme.textPrimary),
+          ),
+          content: SizedBox(
+            width: 400,
+            height: 350,
+            child: Column(
+              children: [
+                TextField(
+                  controller: searchCtrl,
+                  autofocus: true,
+                  style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                  decoration: InputDecoration(
+                    hintText: 'Buscar por nome, codigo...',
+                    prefixIcon: Icon(Icons.search, size: 18),
+                  ),
+                  onChanged: (v) async {
+                    if (v.length < 2) return;
+                    try {
+                      final result = await api.get(
+                        ApiConfig.produtos,
+                        queryParams: {'busca': v, 'limit': '20'},
+                      );
+                      final data = result['data'] as List;
+                      final todos = data
+                          .map((e) => Produto.fromJson(e as Map<String, dynamic>))
+                          .where((p) => !p.isCombo && p.ativo)
+                          .where((p) => !_comboComponentes.any((c) => c.produtoId == p.id))
+                          .toList();
+                      setDialogState(() => resultados = todos);
+                    } catch (_) {}
+                  },
+                ),
+                SizedBox(height: 8),
+                Expanded(
+                  child: resultados.isEmpty
+                      ? Center(
+                          child: Text(
+                            'Digite para buscar produtos',
+                            style: TextStyle(fontSize: 12, color: AppTheme.textMuted),
+                          ),
+                        )
+                      : ListView.builder(
+                          itemCount: resultados.length,
+                          itemBuilder: (_, i) {
+                            final p = resultados[i];
+                            return ListTile(
+                              dense: true,
+                              title: Text(
+                                p.descricao,
+                                style: TextStyle(fontSize: 13, color: AppTheme.textPrimary),
+                              ),
+                              subtitle: Text(
+                                'R\$ ${p.precoVenda.toStringAsFixed(2)} | Est: ${p.estoqueAtual}',
+                                style: TextStyle(fontSize: 11, color: AppTheme.textSecondary),
+                              ),
+                              onTap: () {
+                                setState(() {
+                                  _comboComponentes.add(_ComboComponente(
+                                    produtoId: p.id,
+                                    descricao: p.descricao,
+                                    quantidade: 1,
+                                    precoVenda: p.precoVenda,
+                                  ));
+                                });
+                                Navigator.pop(ctx);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            OutlinedButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Fechar'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ComboComponente {
+  final int produtoId;
+  final String descricao;
+  final double quantidade;
+  final double precoVenda;
+
+  _ComboComponente({
+    required this.produtoId,
+    required this.descricao,
+    required this.quantidade,
+    required this.precoVenda,
+  });
+
+  _ComboComponente copyWith({double? quantidade}) {
+    return _ComboComponente(
+      produtoId: produtoId,
+      descricao: descricao,
+      quantidade: quantidade ?? this.quantidade,
+      precoVenda: precoVenda,
     );
   }
 }

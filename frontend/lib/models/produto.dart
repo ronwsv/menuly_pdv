@@ -1,3 +1,37 @@
+class ComboItemInfo {
+  final int produtoId;
+  final String descricao;
+  final double quantidade;
+  final double precoVenda;
+  final double precoCusto;
+  final int estoqueAtual;
+
+  ComboItemInfo({
+    required this.produtoId,
+    required this.descricao,
+    required this.quantidade,
+    required this.precoVenda,
+    this.precoCusto = 0,
+    this.estoqueAtual = 0,
+  });
+
+  factory ComboItemInfo.fromJson(Map<String, dynamic> json) {
+    return ComboItemInfo(
+      produtoId: Produto._parseInt(json['produto_id']),
+      descricao: json['produto_descricao']?.toString() ?? json['descricao']?.toString() ?? '',
+      quantidade: Produto._parseDouble(json['quantidade']),
+      precoVenda: Produto._parseDouble(json['produto_preco_venda'] ?? json['preco_venda']),
+      precoCusto: Produto._parseDouble(json['produto_preco_custo'] ?? json['preco_custo']),
+      estoqueAtual: Produto._parseInt(json['produto_estoque_atual'] ?? json['estoque_atual']),
+    );
+  }
+
+  Map<String, dynamic> toJson() => {
+    'produto_id': produtoId,
+    'quantidade': quantidade,
+  };
+}
+
 class Produto {
   final int id;
   final String descricao;
@@ -11,6 +45,7 @@ class Produto {
   final int? fornecedorId;
   final String? fornecedorNome;
   final String unidade;
+  final String? tamanho;
   final double precoCusto;
   final double precoVenda;
   final double margemLucro;
@@ -18,7 +53,10 @@ class Produto {
   final int estoqueMinimo;
   final bool ativo;
   final bool bloqueado;
+  final bool isCombo;
   final String? imagemPath;
+  final List<ComboItemInfo>? comboItens;
+  final int? estoqueDisponivel;
 
   Produto({
     required this.id,
@@ -33,6 +71,7 @@ class Produto {
     this.fornecedorId,
     this.fornecedorNome,
     this.unidade = 'un',
+    this.tamanho,
     this.precoCusto = 0,
     required this.precoVenda,
     this.margemLucro = 0,
@@ -40,12 +79,24 @@ class Produto {
     this.estoqueMinimo = 0,
     this.ativo = true,
     this.bloqueado = false,
+    this.isCombo = false,
     this.imagemPath,
+    this.comboItens,
+    this.estoqueDisponivel,
   });
 
   bool get estoqueBaixo => estoqueMinimo > 0 && estoqueAtual < estoqueMinimo;
 
+  int get estoqueEfetivo => isCombo ? (estoqueDisponivel ?? 0) : estoqueAtual;
+
   factory Produto.fromJson(Map<String, dynamic> json) {
+    List<ComboItemInfo>? comboItens;
+    if (json['combo_itens'] != null) {
+      comboItens = (json['combo_itens'] as List)
+          .map((e) => ComboItemInfo.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+
     return Produto(
       id: _parseInt(json['id']),
       descricao: json['descricao']?.toString() ?? '',
@@ -59,6 +110,7 @@ class Produto {
       fornecedorId: json['fornecedor_id'] != null ? _parseInt(json['fornecedor_id']) : null,
       fornecedorNome: json['fornecedor_nome']?.toString(),
       unidade: json['unidade']?.toString() ?? 'un',
+      tamanho: json['tamanho']?.toString(),
       precoCusto: _parseDouble(json['preco_custo']),
       precoVenda: _parseDouble(json['preco_venda']),
       margemLucro: _parseDouble(json['margem_lucro']),
@@ -66,7 +118,10 @@ class Produto {
       estoqueMinimo: _parseInt(json['estoque_minimo']),
       ativo: json['ativo'] == 1 || json['ativo'] == '1' || json['ativo'] == true,
       bloqueado: json['bloqueado'] == 1 || json['bloqueado'] == '1' || json['bloqueado'] == true,
+      isCombo: json['is_combo'] == 1 || json['is_combo'] == '1' || json['is_combo'] == true,
       imagemPath: json['imagem_path']?.toString(),
+      comboItens: comboItens,
+      estoqueDisponivel: json['estoque_disponivel'] != null ? _parseInt(json['estoque_disponivel']) : null,
     );
   }
 
@@ -80,10 +135,14 @@ class Produto {
     'tributacao': tributacao,
     'fornecedor_id': fornecedorId,
     'unidade': unidade,
+    'tamanho': tamanho,
     'preco_custo': precoCusto,
     'preco_venda': precoVenda,
     'estoque_atual': estoqueAtual,
     'estoque_minimo': estoqueMinimo,
+    'is_combo': isCombo,
+    if (isCombo && comboItens != null)
+      'combo_itens': comboItens!.map((e) => e.toJson()).toList(),
   };
 
   static int _parseInt(dynamic v) {

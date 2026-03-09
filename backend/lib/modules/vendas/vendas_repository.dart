@@ -105,11 +105,13 @@ class VendasRepository {
     final prefix =
         '${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}';
 
+    final prefixLen = (prefix.length + 1).toString();
     final results = await Database.instance.query(
-      'SELECT COUNT(*) as total FROM vendas WHERE numero LIKE :prefix',
-      {'prefix': '$prefix%'},
+      "SELECT MAX(CAST(SUBSTRING(numero, :prefixLen) AS UNSIGNED)) as max_seq "
+      "FROM vendas WHERE numero LIKE :prefix",
+      {'prefix': '$prefix%', 'prefixLen': prefixLen},
     );
-    final seq = int.parse(results.first['total'] ?? '0') + 1;
+    final seq = int.parse(results.first['max_seq'] ?? '0') + 1;
     return '$prefix${seq.toString().padLeft(4, '0')}';
   }
 
@@ -160,11 +162,21 @@ class VendasRepository {
 
   Future<Map<String, String?>?> getProduto(int id) async {
     final results = await Database.instance.query(
-      'SELECT id, descricao, estoque_atual, preco_venda, bloqueado, ativo FROM produtos WHERE id = :id',
+      'SELECT id, descricao, estoque_atual, preco_venda, bloqueado, ativo, is_combo FROM produtos WHERE id = :id',
       {'id': id.toString()},
     );
     if (results.isEmpty) return null;
     return results.first;
+  }
+
+  Future<List<Map<String, String?>>> getComboItens(int comboId) async {
+    return await Database.instance.query(
+      'SELECT ci.produto_id, ci.quantidade, p.descricao, p.estoque_atual '
+      'FROM combo_itens ci '
+      'JOIN produtos p ON ci.produto_id = p.id '
+      'WHERE ci.combo_id = :combo_id',
+      {'combo_id': comboId.toString()},
+    );
   }
 
   Future<Map<String, String?>?> getServico(int id) async {
@@ -212,6 +224,158 @@ class VendasRepository {
     return await Database.instance.query(
       'SELECT * FROM venda_pagamentos WHERE venda_id = :venda_id ORDER BY id',
       {'venda_id': vendaId.toString()},
+    );
+  }
+
+  Future<int> buscarCaixaAberto() async {
+    final results = await Database.instance.query(
+      "SELECT id FROM caixas WHERE status = 'aberto' LIMIT 1", {});
+    if (results.isEmpty) return 1;
+    return int.parse(results.first['id'] ?? '1');
+  }
+
+  // ─── Comissões ──────────────────────────────────────────────────
+
+  Future<void> criarComissao(Map<String, String> data) async {
+    final columns = data.keys.toList();
+    final placeholders = columns.map((c) => ':$c').toList();
+    final sql =
+        'INSERT INTO comissoes (${columns.join(', ')}) VALUES (${placeholders.join(', ')})';
+    await Database.instance.execute(sql, data);
+  }
+
+  Future<void> cancelarComissaoPorVenda(int vendaId) async {
+    await Database.instance.execute(
+      "UPDATE comissoes SET status = 'cancelada' WHERE venda_id = :venda_id",
+      {'venda_id': vendaId.toString()},
+    );
+  }
+
+  Future<double?> buscarPercentualVendedor(int vendedorId) async {
+    final results = await Database.instance.query(
+      'SELECT comissao_percentual FROM usuarios WHERE id = :id',
+      {'id': vendedorId.toString()},
+    );
+    if (results.isEmpty) return null;
+    final val = results.first['comissao_percentual'];
+    if (val == null) return null;
+    return double.tryParse(val);
+  }
+
+  Future<double> buscarPercentualPadrao() async {
+    final results = await Database.instance.query(
+      "SELECT valor FROM configuracoes WHERE chave = 'comissao_percentual_padrao'",
+      {},
+    );
+    if (results.isEmpty) return 0;
+    return double.tryParse(results.first['valor'] ?? '0') ?? 0;
+  }
+
+  Future<List<Map<String, String?>>> buscarComissoes({
+    int? vendedorId,
+    String? dataInicio,
+    String? dataFim,
+    String? status,
+    int limit = 50,
+    int offset = 0,
+  }) async {
+    var where = 'WHERE 1=1';
+    final params = <String, String>{};
+
+    if (vendedorId != null) {
+      where += ' AND c.vendedor_id = :vendedor_id';
+      params['vendedor_id'] = vendedorId.toString();
+    }
+    if (dataInicio != null) {
+      where += ' AND c.criado_em >= :data_inicio';
+      params['data_inicio'] = dataInicio;
+    }
+    if (dataFim != null) {
+      where += ' AND c.criado_em <= :data_fim';
+      params['data_fim'] = dataFim;
+    }
+    if (status != null) {
+      where += ' AND c.status = :status';
+      params['status'] = status;
+    }
+
+    return await Database.instance.query(
+      'SELECT c.*, v.numero as venda_numero, u.nome as vendedor_nome '
+      'FROM comissoes c '
+      'JOIN vendas v ON c.venda_id = v.id '
+      'JOIN usuarios u ON c.vendedor_id = u.id '
+      '$where ORDER BY c.criado_em DESC LIMIT $limit OFFSET $offset',
+      params,
+    );
+  }
+
+  Future<int> countComissoes({
+    int? vendedorId,
+    String? dataInicio,
+    String? dataFim,
+    String? status,
+  }) async {
+    var where = 'WHERE 1=1';
+    final params = <String, String>{};
+
+    if (vendedorId != null) {
+      where += ' AND vendedor_id = :vendedor_id';
+      params['vendedor_id'] = vendedorId.toString();
+    }
+    if (dataInicio != null) {
+      where += ' AND criado_em >= :data_inicio';
+      params['data_inicio'] = dataInicio;
+    }
+    if (dataFim != null) {
+      where += ' AND criado_em <= :data_fim';
+      params['data_fim'] = dataFim;
+    }
+    if (status != null) {
+      where += ' AND status = :status';
+      params['status'] = status;
+    }
+
+    final results = await Database.instance.query(
+      'SELECT COUNT(*) as total FROM comissoes $where',
+      params,
+    );
+    if (results.isEmpty) return 0;
+    return int.parse(results.first['total'] ?? '0');
+  }
+
+  Future<List<Map<String, String?>>> buscarResumoComissoes({
+    int? vendedorId,
+    String? dataInicio,
+    String? dataFim,
+  }) async {
+    var where = "WHERE c.status = 'ativa'";
+    final params = <String, String>{};
+
+    if (vendedorId != null) {
+      where += ' AND c.vendedor_id = :vendedor_id';
+      params['vendedor_id'] = vendedorId.toString();
+    }
+    if (dataInicio != null) {
+      where += ' AND c.criado_em >= :data_inicio';
+      params['data_inicio'] = dataInicio;
+    }
+    if (dataFim != null) {
+      where += ' AND c.criado_em <= :data_fim';
+      params['data_fim'] = dataFim;
+    }
+
+    return await Database.instance.query(
+      'SELECT c.vendedor_id, u.nome as vendedor_nome, '
+      'COUNT(*) as total_vendas, '
+      'SUM(c.valor_venda) as total_vendido, '
+      'SUM(c.valor_comissao) as total_comissao, '
+      'AVG(c.percentual) as percentual_medio '
+      'FROM comissoes c '
+      'JOIN usuarios u ON c.vendedor_id = u.id '
+      '$where '
+      'GROUP BY c.vendedor_id, u.nome '
+      'ORDER BY total_comissao DESC',
+      params,
     );
   }
 }

@@ -242,27 +242,41 @@ class _FornecedoresScreenState extends State<FornecedoresScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      scrollDirection: Axis.vertical,
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor:
-              WidgetStateProperty.all(AppTheme.scaffoldBackground),
-          dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
-          border: TableBorder.all(color: AppTheme.border, width: 0.5),
-          columnSpacing: 24,
-          columns: [
-            DataColumn(label: Text('Razao Social')),
-            DataColumn(label: Text('Nome Fantasia')),
-            DataColumn(label: Text('CNPJ')),
-            DataColumn(label: Text('Telefone')),
-            DataColumn(label: Text('Contato')),
-            DataColumn(label: Text('Cidade/UF')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Acoes')),
-          ],
-          rows: fornecedores.map((f) => _buildRow(f)).toList(),
+    final horizontalController = ScrollController();
+    final verticalController = ScrollController();
+
+    return Scrollbar(
+      controller: verticalController,
+      thumbVisibility: true,
+      child: Scrollbar(
+        controller: horizontalController,
+        thumbVisibility: true,
+        notificationPredicate: (notification) => notification.depth == 1,
+        child: SingleChildScrollView(
+          controller: verticalController,
+          scrollDirection: Axis.vertical,
+          child: SingleChildScrollView(
+            controller: horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor:
+                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
+              dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+              border: TableBorder.all(color: AppTheme.border, width: 0.5),
+              columnSpacing: 24,
+              columns: [
+                DataColumn(label: Text('Razao Social')),
+                DataColumn(label: Text('Nome Fantasia')),
+                DataColumn(label: Text('CNPJ')),
+                DataColumn(label: Text('Telefone')),
+                DataColumn(label: Text('Contato')),
+                DataColumn(label: Text('Cidade/UF')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Acoes')),
+              ],
+              rows: fornecedores.map((f) => _buildRow(f)).toList(),
+            ),
+          ),
         ),
       ),
     );
@@ -277,16 +291,27 @@ class _FornecedoresScreenState extends State<FornecedoresScreen> {
     ].join('/');
 
     return DataRow(cells: [
-      DataCell(Text(
-        fornecedor.razaoSocial,
-        style: TextStyle(
-          color: AppTheme.textPrimary,
-          fontWeight: FontWeight.w600,
+      DataCell(ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 280),
+        child: Tooltip(
+          message: fornecedor.razaoSocial,
+          child: Text(
+            fornecedor.razaoSocial,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       )),
-      DataCell(Text(
-        fornecedor.nomeFantasia ?? '-',
-        style: TextStyle(color: AppTheme.textPrimary),
+      DataCell(ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: 180),
+        child: Text(
+          fornecedor.nomeFantasia ?? '-',
+          style: TextStyle(color: AppTheme.textPrimary),
+          overflow: TextOverflow.ellipsis,
+        ),
       )),
       DataCell(Text(
         fornecedor.cnpj ?? '-',

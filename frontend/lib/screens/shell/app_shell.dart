@@ -21,6 +21,7 @@ import '../crediario/crediario_screen.dart';
 import '../servicos/servicos_screen.dart';
 import '../ordens_servico/ordens_servico_screen.dart';
 import '../devolucoes/devolucoes_screen.dart';
+import '../consignacoes/consignacoes_screen.dart';
 import '../relatorios/relatorios_screen.dart';
 import '../configuracoes/configuracoes_screen.dart';
 
@@ -89,6 +90,7 @@ class _AppShellState extends State<AppShell> {
     DevolucoesScreen(),                        // 15
     RelatoriosScreen(),                        // 16
     ConfiguracoesScreen(),                     // 17
+    const ConsignacoesScreen(),                // 18
   ];
 
   @override

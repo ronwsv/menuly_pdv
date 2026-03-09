@@ -7,6 +7,7 @@ import '../services/api_client.dart';
 import '../config/api_config.dart';
 import '../models/produto.dart';
 import '../models/categoria.dart';
+export '../models/produto.dart' show ComboItemInfo;
 
 class ProdutosProvider extends ChangeNotifier {
   final ApiClient _api;
@@ -30,7 +31,7 @@ class ProdutosProvider extends ChangeNotifier {
   bool get isLoading => _isLoading;
   String? get error => _error;
 
-  Future<void> carregarProdutos({int page = 1}) async {
+  Future<void> carregarProdutos({int page = 1, int limit = 50}) async {
     _isLoading = true;
     _error = null;
     _page = page;
@@ -38,8 +39,8 @@ class ProdutosProvider extends ChangeNotifier {
 
     try {
       final params = <String, String>{
-        'limit': '50',
-        'offset': ((page - 1) * 50).toString(),
+        'limit': limit.toString(),
+        'offset': ((page - 1) * limit).toString(),
       };
       if (_busca != null && _busca!.isNotEmpty) params['busca'] = _busca!;
       if (_categoriaFiltro != null) params['categoria_id'] = _categoriaFiltro.toString();
@@ -151,6 +152,14 @@ class ProdutosProvider extends ChangeNotifier {
     );
     await carregarProdutos();
     return result['data'] as Map<String, dynamic>;
+  }
+
+  Future<List<ComboItemInfo>> carregarComboItens(int produtoId) async {
+    final result = await _api.get(ApiConfig.produtoComboItens(produtoId));
+    final data = result['data'] as List;
+    return data
+        .map((e) => ComboItemInfo.fromJson(e as Map<String, dynamic>))
+        .toList();
   }
 
   Future<List<Map<String, dynamic>>> rankingGeral({int limit = 20}) async {

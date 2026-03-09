@@ -8,6 +8,7 @@ class VendaItem {
   final double desconto;
   final double total;
   final DateTime? criadoEm;
+  final String? comboSnapshot;
 
   // Campos extras de JOIN
   final String? produtoDescricao;
@@ -22,6 +23,7 @@ class VendaItem {
     this.desconto = 0,
     required this.total,
     this.criadoEm,
+    this.comboSnapshot,
     this.produtoDescricao,
   });
 
@@ -39,6 +41,7 @@ class VendaItem {
       total: double.parse(row['total'] ?? '0'),
       criadoEm:
           row['criado_em'] != null ? DateTime.parse(row['criado_em']!) : null,
+      comboSnapshot: row['combo_snapshot'],
       produtoDescricao: row['produto_descricao'],
     );
   }
@@ -54,6 +57,7 @@ class VendaItem {
       'desconto': desconto,
       'total': total,
       'criado_em': criadoEm?.toIso8601String(),
+      if (comboSnapshot != null) 'combo_snapshot': comboSnapshot,
       if (produtoDescricao != null) 'produto_descricao': produtoDescricao,
     };
   }

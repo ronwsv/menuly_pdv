@@ -1,6 +1,7 @@
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
+import '../../core/exceptions/api_exception.dart';
 import '../../core/helpers/json_response.dart';
 import '../../core/helpers/query_helpers.dart';
 import 'compras_service.dart';
@@ -42,7 +43,8 @@ class ComprasController {
   }
 
   Future<Response> obterPorId(Request request) async {
-    final id = int.parse(request.params['id']!);
+    final id = int.tryParse(request.params['id'] ?? '');
+    if (id == null) return JsonResponse.error(400, 'ID inválido');
     final compra = await _service.obterPorId(id);
     return JsonResponse.ok(compra);
   }
@@ -55,7 +57,8 @@ class ComprasController {
   }
 
   Future<Response> atualizar(Request request) async {
-    final id = int.parse(request.params['id']!);
+    final id = int.tryParse(request.params['id'] ?? '');
+    if (id == null) return JsonResponse.error(400, 'ID inválido');
     final body = await parseBody(request);
     final userId = request.context['userId'] as int;
     final compra = await _service.atualizar(id, body, userId);
@@ -63,9 +66,28 @@ class ComprasController {
   }
 
   Future<Response> excluir(Request request) async {
-    final id = int.parse(request.params['id']!);
+    final id = int.tryParse(request.params['id'] ?? '');
+    if (id == null) return JsonResponse.error(400, 'ID inválido');
     final userId = request.context['userId'] as int;
     await _service.excluir(id, userId);
     return JsonResponse.ok({'message': 'Compra excluída com sucesso'});
+  }
+
+  Future<Response> importarXml(Request request) async {
+    final body = await parseBody(request);
+    final xmlContent = body['xml_content'] as String?;
+    if (xmlContent == null || xmlContent.trim().isEmpty) {
+      return JsonResponse.error(400, 'xml_content é obrigatório');
+    }
+    try {
+      final result = await _service.parsearXmlNfe(xmlContent);
+      return JsonResponse.ok(result);
+    } on ApiException {
+      rethrow; // Deixar o error middleware tratar (ValidationException, etc.)
+    } catch (e, stackTrace) {
+      print('Erro ao importar XML: $e');
+      print('StackTrace: $stackTrace');
+      return JsonResponse.error(500, 'Erro ao processar XML: $e');
+    }
   }
 }

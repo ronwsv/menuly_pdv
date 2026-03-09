@@ -70,6 +70,15 @@ Router produtosRouter(ProdutosController controller) {
         ),
   );
 
+  // Combo itens (must be before /<id> to avoid route conflicts)
+  router.get(
+    '/<id>/combo-itens',
+    Pipeline().addMiddleware(auth).addHandler(
+          (Request req) =>
+              controller.comboItens(req, req.params['id']!),
+        ),
+  );
+
   router.get(
     '/<id>',
     Pipeline().addMiddleware(auth).addHandler(

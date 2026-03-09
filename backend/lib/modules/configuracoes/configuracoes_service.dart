@@ -130,7 +130,7 @@ class ConfiguracoesService {
       'perm_compras', 'perm_clientes', 'perm_fornecedores', 'perm_categorias',
       'perm_caixa', 'perm_contas_receber', 'perm_contas_pagar',
       'perm_crediario', 'perm_servicos', 'perm_ordens_servico',
-      'perm_devolucoes', 'perm_relatorios',
+      'perm_devolucoes', 'perm_consignacoes', 'perm_relatorios',
     ]) {
       if (data.containsKey(permKey)) {
         insertData[permKey] = _toDbStr(data[permKey]);
@@ -141,6 +141,9 @@ class ConfiguracoesService {
     }
     if (data.containsKey('auto_login')) {
       insertData['auto_login'] = _toDbStr(data['auto_login']);
+    }
+    if (data.containsKey('comissao_percentual') && data['comissao_percentual'] != null) {
+      insertData['comissao_percentual'] = data['comissao_percentual'].toString();
     }
 
     final id = await _repository.createUsuario(insertData);
@@ -174,6 +177,8 @@ class ConfiguracoesService {
       if (entry.key == 'id' || entry.key == 'criado_em' || entry.key == 'atualizado_em') continue;
       if (entry.key == 'senha') {
         updateData['senha_hash'] = PasswordHasher.hash(entry.value as String);
+      } else if (entry.value == null) {
+        updateData[entry.key] = null;
       } else if (entry.value is bool) {
         updateData[entry.key] = (entry.value as bool) ? '1' : '0';
       } else {

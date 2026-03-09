@@ -114,6 +114,12 @@ import 'package:menuly_pdv_backend/modules/devolucoes/devolucoes_service.dart';
 import 'package:menuly_pdv_backend/modules/devolucoes/devolucoes_controller.dart';
 import 'package:menuly_pdv_backend/modules/devolucoes/devolucoes_router.dart';
 
+// Consignacoes
+import 'package:menuly_pdv_backend/modules/consignacoes/consignacoes_repository.dart';
+import 'package:menuly_pdv_backend/modules/consignacoes/consignacoes_service.dart';
+import 'package:menuly_pdv_backend/modules/consignacoes/consignacoes_controller.dart';
+import 'package:menuly_pdv_backend/modules/consignacoes/consignacoes_router.dart';
+
 // Backup
 import 'package:menuly_pdv_backend/modules/backup/backup_service.dart';
 import 'package:menuly_pdv_backend/modules/backup/backup_controller.dart';
@@ -130,7 +136,34 @@ Future<void> main() async {
   print('      Conectado: ${ServerConfig.dbHost}:${ServerConfig.dbPort}/${ServerConfig.dbName}');
 
   // 1.5. Migrar colunas de permissão
+  print('      Migrando permissões...');
   await _migratePermissions();
+
+  // 1.6. Migrar combos
+  print('      Migrando combos...');
+  await _migrateCombo();
+
+  // 1.7. Migrar campo tamanho
+  print('      Migrando tamanho...');
+  await _migrateTamanho();
+
+  // 1.8. Migrar consignações
+  print('      Migrando consignações...');
+  await _migrateConsignacoes();
+
+  // 1.9. Migrar comissões
+  print('      Migrando comissões...');
+  await _migrateComissoes();
+
+  // 1.95. Migrar combo_snapshot
+  print('      Migrando combo_snapshot...');
+  await _migrateComboSnapshot();
+
+  // 1.96. Índice unique na chave_nfe de compras
+  print('      Migrando chave_nfe index...');
+  await _migrateChaveNfeIndex();
+
+  print('      Migrações concluídas.');
 
   // 2. Corrigir hash do admin se for placeholder
   print('[2/4] Verificando senha do admin...');
@@ -228,6 +261,11 @@ Future<void> main() async {
   final devolucoesService = DevolucoesService(devolucoesRepository);
   final devolucoesController = DevolucoesController(devolucoesService);
 
+  // Consignacoes
+  final consignacoesRepository = ConsignacoesRepository();
+  final consignacoesService = ConsignacoesService(consignacoesRepository);
+  final consignacoesController = ConsignacoesController(consignacoesService);
+
   // Backup
   final backupService = BackupService();
   final backupController = BackupController(backupService);
@@ -286,6 +324,7 @@ Future<void> main() async {
   app.mount('/api/ordens-servico/', ordensServicoRouter(ordensServicoController).call);
   app.mount('/api/crediario/', crediarioRouter(crediarioController).call);
   app.mount('/api/devolucoes/', devolucoesRouter(devolucoesController).call);
+  app.mount('/api/consignacoes/', consignacoesRouter(consignacoesController).call);
   app.mount('/api/backup/', backupRouter(backupController).call);
 
   // Pipeline: log -> cors -> trailing slash -> error -> rotas
@@ -328,6 +367,7 @@ Future<void> main() async {
   print('  POST /api/fornecedores');
   print('  GET  /api/compras');
   print('  POST /api/compras');
+  print('  POST /api/compras/importar-xml');
   print('  GET  /api/configuracoes');
   print('  POST /api/produtos/<id>/imagem');
   print('  GET  /uploads/<path>');
@@ -346,6 +386,12 @@ Future<void> main() async {
   print('  GET  /api/contas-pagar');
   print('  POST /api/contas-pagar');
   print('  GET  /api/devolucoes/creditos');
+  print('  GET  /api/consignacoes');
+  print('  POST /api/consignacoes');
+  print('  POST /api/consignacoes/<id>/acerto');
+  print('  POST /api/consignacoes/<id>/cancelar');
+  print('  GET  /api/vendas/comissoes');
+  print('  GET  /api/vendas/comissoes/resumo');
   print('');
   print('Pressione Ctrl+C para parar.');
 
@@ -379,6 +425,7 @@ const _apiPrefixes = [
   '/api/ordens-servico',
   '/api/crediario',
   '/api/devolucoes',
+  '/api/consignacoes',
   '/api/backup',
 ];
 
@@ -465,5 +512,208 @@ Future<void> _fixAdminPassword() async {
     }
   } catch (e) {
     print('      Aviso: Erro ao verificar admin: $e');
+  }
+}
+
+/// Add tamanho column to produtos
+Future<void> _migrateTamanho() async {
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE produtos ADD COLUMN tamanho VARCHAR(20) DEFAULT NULL AFTER unidade',
+      {},
+    );
+  } catch (_) {
+    // Column already exists
+  }
+  try {
+    await Database.instance.execute(
+      'CREATE INDEX idx_produtos_tamanho ON produtos(tamanho)',
+      {},
+    );
+  } catch (_) {
+    // Index already exists
+  }
+}
+
+/// Add consignacoes tables and permission
+Future<void> _migrateConsignacoes() async {
+  // Permission column
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE usuarios ADD COLUMN perm_consignacoes TINYINT(1) DEFAULT 0',
+      {},
+    );
+  } catch (_) {}
+
+  // Main table
+  await Database.instance.execute(
+    'CREATE TABLE IF NOT EXISTS consignacoes ('
+    'id INT PRIMARY KEY AUTO_INCREMENT, '
+    'numero VARCHAR(20) NOT NULL UNIQUE, '
+    "tipo ENUM('saida', 'entrada') NOT NULL, "
+    'cliente_id INT, '
+    'fornecedor_id INT, '
+    'usuario_id INT NOT NULL, '
+    "status ENUM('aberta', 'parcial', 'fechada', 'cancelada') DEFAULT 'aberta', "
+    'total_itens INT NOT NULL DEFAULT 0, '
+    'valor_total DECIMAL(10,2) NOT NULL DEFAULT 0, '
+    'valor_acertado DECIMAL(10,2) NOT NULL DEFAULT 0, '
+    'observacoes TEXT, '
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+    'atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, '
+    'FOREIGN KEY (cliente_id) REFERENCES clientes(id), '
+    'FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id), '
+    'FOREIGN KEY (usuario_id) REFERENCES usuarios(id), '
+    'INDEX idx_consig_tipo (tipo), '
+    'INDEX idx_consig_status (status), '
+    'INDEX idx_consig_cliente (cliente_id), '
+    'INDEX idx_consig_fornecedor (fornecedor_id)'
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+    {},
+  );
+
+  // Items table
+  await Database.instance.execute(
+    'CREATE TABLE IF NOT EXISTS consignacao_itens ('
+    'id INT PRIMARY KEY AUTO_INCREMENT, '
+    'consignacao_id INT NOT NULL, '
+    'produto_id INT NOT NULL, '
+    'quantidade DECIMAL(10,3) NOT NULL, '
+    'quantidade_vendida DECIMAL(10,3) DEFAULT 0, '
+    'quantidade_devolvida DECIMAL(10,3) DEFAULT 0, '
+    'preco_unitario DECIMAL(10,2) NOT NULL, '
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+    'FOREIGN KEY (consignacao_id) REFERENCES consignacoes(id), '
+    'FOREIGN KEY (produto_id) REFERENCES produtos(id), '
+    'INDEX idx_consig_itens_consig (consignacao_id)'
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+    {},
+  );
+
+  // Acertos table
+  await Database.instance.execute(
+    'CREATE TABLE IF NOT EXISTS consignacao_acertos ('
+    'id INT PRIMARY KEY AUTO_INCREMENT, '
+    'consignacao_id INT NOT NULL, '
+    'usuario_id INT NOT NULL, '
+    'valor_vendido DECIMAL(10,2) NOT NULL DEFAULT 0, '
+    'forma_pagamento VARCHAR(50), '
+    'observacoes TEXT, '
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+    'FOREIGN KEY (consignacao_id) REFERENCES consignacoes(id), '
+    'FOREIGN KEY (usuario_id) REFERENCES usuarios(id), '
+    'INDEX idx_consig_acerto_consig (consignacao_id)'
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+    {},
+  );
+
+  // Acerto items table
+  await Database.instance.execute(
+    'CREATE TABLE IF NOT EXISTS consignacao_acerto_itens ('
+    'id INT PRIMARY KEY AUTO_INCREMENT, '
+    'acerto_id INT NOT NULL, '
+    'consignacao_item_id INT NOT NULL, '
+    'quantidade_vendida DECIMAL(10,3) DEFAULT 0, '
+    'quantidade_devolvida DECIMAL(10,3) DEFAULT 0, '
+    'valor DECIMAL(10,2) NOT NULL DEFAULT 0, '
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+    'FOREIGN KEY (acerto_id) REFERENCES consignacao_acertos(id), '
+    'FOREIGN KEY (consignacao_item_id) REFERENCES consignacao_itens(id), '
+    'INDEX idx_consig_acerto_item_acerto (acerto_id)'
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+    {},
+  );
+}
+
+/// Add comissoes table, comissao_percentual column, and global config
+Future<void> _migrateComissoes() async {
+  // Column on usuarios
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE usuarios ADD COLUMN comissao_percentual DECIMAL(5,2) DEFAULT NULL',
+      {},
+    );
+  } catch (_) {}
+
+  // Comissoes table
+  await Database.instance.execute(
+    'CREATE TABLE IF NOT EXISTS comissoes ('
+    'id INT PRIMARY KEY AUTO_INCREMENT, '
+    'venda_id INT NOT NULL, '
+    'vendedor_id INT NOT NULL, '
+    'valor_venda DECIMAL(10,2) NOT NULL, '
+    'percentual DECIMAL(5,2) NOT NULL, '
+    'valor_comissao DECIMAL(10,2) NOT NULL, '
+    "status ENUM('ativa', 'cancelada') DEFAULT 'ativa', "
+    'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+    'FOREIGN KEY (venda_id) REFERENCES vendas(id), '
+    'FOREIGN KEY (vendedor_id) REFERENCES usuarios(id), '
+    'INDEX idx_comissao_vendedor (vendedor_id), '
+    'INDEX idx_comissao_status (status), '
+    'INDEX idx_comissao_criado (criado_em)'
+    ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+    {},
+  );
+
+  // Global default config
+  try {
+    await Database.instance.execute(
+      "INSERT INTO configuracoes (chave, valor, grupo, descricao) "
+      "VALUES ('comissao_percentual_padrao', '5.00', 'vendas', 'Percentual padrão de comissão') "
+      "ON DUPLICATE KEY UPDATE chave = chave",
+      {},
+    );
+  } catch (_) {}
+}
+
+/// Add is_combo column and combo_itens table
+Future<void> _migrateCombo() async {
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE produtos ADD COLUMN is_combo TINYINT(1) NOT NULL DEFAULT 0 AFTER bloqueado',
+      {},
+    );
+  } catch (_) {
+    // Column already exists
+  }
+  try {
+    await Database.instance.execute(
+      'CREATE TABLE IF NOT EXISTS combo_itens ('
+      'id INT PRIMARY KEY AUTO_INCREMENT, '
+      'combo_id INT NOT NULL, '
+      'produto_id INT NOT NULL, '
+      'quantidade DECIMAL(10,3) NOT NULL DEFAULT 1, '
+      'criado_em DATETIME DEFAULT CURRENT_TIMESTAMP, '
+      'FOREIGN KEY (combo_id) REFERENCES produtos(id) ON DELETE CASCADE, '
+      'FOREIGN KEY (produto_id) REFERENCES produtos(id), '
+      'UNIQUE KEY uk_combo_produto (combo_id, produto_id)'
+      ') ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci',
+      {},
+    );
+  } catch (_) {
+    // Table already exists
+  }
+}
+
+/// Add combo_snapshot column to venda_itens
+Future<void> _migrateChaveNfeIndex() async {
+  try {
+    await Database.instance.execute(
+      'CREATE UNIQUE INDEX idx_compras_chave_nfe ON compras (chave_nfe)',
+      {},
+    );
+  } catch (_) {
+    // Index already exists
+  }
+}
+
+Future<void> _migrateComboSnapshot() async {
+  try {
+    await Database.instance.execute(
+      'ALTER TABLE venda_itens ADD COLUMN combo_snapshot JSON DEFAULT NULL',
+      {},
+    );
+  } catch (_) {
+    // Column already exists
   }
 }

@@ -78,4 +78,12 @@ class ComprasProvider extends ChangeNotifier {
     await _api.delete(ApiConfig.compraById(id));
     await carregarCompras();
   }
+
+  Future<Map<String, dynamic>> importarXml(String xmlContent) async {
+    final result = await _api.post(
+      ApiConfig.comprasImportarXml,
+      body: {'xml_content': xmlContent},
+    );
+    return result['data'] as Map<String, dynamic>;
+  }
 }

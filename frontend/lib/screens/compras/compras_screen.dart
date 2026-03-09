@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -31,7 +33,7 @@ class _ComprasScreenState extends State<ComprasScreen> {
     context.read<ComprasProvider>().carregarCompras();
   }
 
-  void _abrirFormulario([Compra? compra]) async {
+  void _abrirFormulario([Compra? compra, Map<String, dynamic>? dadosXml]) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (_) => MultiProvider(
@@ -44,11 +46,51 @@ class _ComprasScreenState extends State<ComprasScreen> {
               value: context.read<ProdutosProvider>()),
           Provider.value(value: context.read<ApiClient>()),
         ],
-        child: _CompraFormDialog(compra: compra),
+        child: _CompraFormDialog(compra: compra, dadosXml: dadosXml),
       ),
     );
     if (result == true && mounted) {
       context.read<ComprasProvider>().carregarCompras();
+    }
+  }
+
+  Future<void> _importarXml() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['xml'],
+      dialogTitle: 'Selecionar XML da NF-e',
+    );
+
+    if (result == null || result.files.single.path == null) return;
+    if (!mounted) return;
+
+    // Mostrar loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final file = File(result.files.single.path!);
+      final xmlContent = await file.readAsString();
+
+      if (!mounted) return;
+      final provider = context.read<ComprasProvider>();
+      final dadosXml = await provider.importarXml(xmlContent);
+
+      if (!mounted) return;
+      Navigator.of(context).pop(); // Fechar loading
+
+      // Abrir formulário pré-preenchido com dados do XML
+      _abrirFormulario(null, dadosXml);
+    } catch (e) {
+      if (mounted) {
+        Navigator.of(context).pop(); // Fechar loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Erro ao importar XML: $e')),
+        );
+      }
     }
   }
 
@@ -136,6 +178,12 @@ class _ComprasScreenState extends State<ComprasScreen> {
           ),
         ),
         Spacer(),
+        OutlinedButton.icon(
+          onPressed: _importarXml,
+          icon: Icon(Icons.upload_file, size: 18),
+          label: Text('Importar XML'),
+        ),
+        SizedBox(width: 12),
         ElevatedButton.icon(
           onPressed: () => _abrirFormulario(),
           icon: Icon(Icons.add, size: 18),
@@ -216,25 +264,38 @@ class _ComprasScreenState extends State<ComprasScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          headingRowColor:
-              WidgetStateProperty.all(AppTheme.scaffoldBackground),
-          dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
-          border: TableBorder.all(color: AppTheme.border, width: 0.5),
-          columnSpacing: 24,
-          columns: [
-            DataColumn(label: Text('Data')),
-            DataColumn(label: Text('Fornecedor')),
-            DataColumn(label: Text('Forma Pgto')),
-            DataColumn(label: Text('Valor Bruto'), numeric: true),
-            DataColumn(label: Text('Valor Final'), numeric: true),
-            DataColumn(label: Text('Chave NF-e')),
-            DataColumn(label: Text('Acoes')),
-          ],
-          rows: compras.map((c) => _buildRow(c)).toList(),
+    final verticalController = ScrollController();
+    final horizontalController = ScrollController();
+    return Scrollbar(
+      controller: verticalController,
+      thumbVisibility: true,
+      child: Scrollbar(
+        controller: horizontalController,
+        thumbVisibility: true,
+        notificationPredicate: (notification) => notification.depth == 1,
+        child: SingleChildScrollView(
+          controller: verticalController,
+          child: SingleChildScrollView(
+            controller: horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor:
+                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
+              dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+              border: TableBorder.all(color: AppTheme.border, width: 0.5),
+              columnSpacing: 24,
+              columns: [
+                DataColumn(label: Text('Data')),
+                DataColumn(label: Text('Fornecedor')),
+                DataColumn(label: Text('Forma Pgto')),
+                DataColumn(label: Text('Valor Bruto'), numeric: true),
+                DataColumn(label: Text('Valor Final'), numeric: true),
+                DataColumn(label: Text('Chave NF-e')),
+                DataColumn(label: Text('Acoes')),
+              ],
+              rows: compras.map((c) => _buildRow(c)).toList(),
+            ),
+          ),
         ),
       ),
     );
@@ -266,10 +327,17 @@ class _ComprasScreenState extends State<ComprasScreen> {
         dataFormatada,
         style: TextStyle(color: AppTheme.textPrimary),
       )),
-      DataCell(Text(
-        compra.fornecedorNome ?? 'ID: ${compra.fornecedorId}',
-        style: TextStyle(
-            color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+      DataCell(Tooltip(
+        message: compra.fornecedorNome ?? 'ID: ${compra.fornecedorId}',
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 220),
+          child: Text(
+            compra.fornecedorNome ?? 'ID: ${compra.fornecedorId}',
+            style: TextStyle(
+                color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       )),
       DataCell(Text(
         pagamentoLabel,
@@ -381,7 +449,8 @@ class _StatCard extends StatelessWidget {
 
 class _CompraFormDialog extends StatefulWidget {
   final Compra? compra;
-  const _CompraFormDialog({this.compra});
+  final Map<String, dynamic>? dadosXml;
+  const _CompraFormDialog({this.compra, this.dadosXml});
 
   @override
   State<_CompraFormDialog> createState() => _CompraFormDialogState();
@@ -404,6 +473,9 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
   List<Produto> _produtos = [];
   bool _saving = false;
   bool _loadingDetalhes = false;
+  bool _xmlImportado = false;
+  int _itensNaoEncontrados = 0;
+  int _itensAutoCriados = 0;
 
   bool get _isEditing => widget.compra != null;
 
@@ -426,9 +498,10 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
     final fornProv = context.read<FornecedoresProvider>();
     final prodProv = context.read<ProdutosProvider>();
 
+    // Carregar com limit alto para dropdown (precisa de todos os produtos)
     await Future.wait([
       fornProv.carregarFornecedores(),
-      prodProv.carregarProdutos(),
+      prodProv.carregarProdutos(limit: 500),
     ]);
 
     if (!mounted) return;
@@ -437,6 +510,12 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
       _fornecedores = fornProv.fornecedores;
       _produtos = prodProv.produtos;
     });
+
+    // Se importando XML, pré-preencher
+    if (widget.dadosXml != null) {
+      _preencherComXml(widget.dadosXml!);
+      return;
+    }
 
     // Se editando, carregar detalhes
     if (_isEditing) {
@@ -495,6 +574,86 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
 
   void _removerItem(int index) {
     setState(() => _itens.removeAt(index));
+  }
+
+  void _preencherComXml(Map<String, dynamic> dados) {
+    final fornecedor = dados['fornecedor'] as Map<String, dynamic>?;
+    final nfe = dados['nfe'] as Map<String, dynamic>?;
+    final itensXml = dados['itens'] as List?;
+    final totais = dados['totais'] as Map<String, dynamic>?;
+
+    // Fornecedor - verificar se está na lista carregada
+    if (fornecedor != null && fornecedor['fornecedor_id'] != null) {
+      final fId = fornecedor['fornecedor_id'] as int;
+      final existeNaLista = _fornecedores.any((f) => f.id == fId);
+      if (existeNaLista) {
+        _fornecedorId = fId;
+      }
+    }
+
+    // NF-e data
+    if (nfe != null) {
+      final chave = nfe['chave_nfe']?.toString() ?? '';
+      if (chave.isNotEmpty) _chaveNfeCtrl.text = chave;
+
+      final dhEmi = nfe['data_emissao']?.toString() ?? '';
+      if (dhEmi.isNotEmpty) {
+        _dataCompra = DateTime.tryParse(dhEmi) ?? DateTime.now();
+      }
+    }
+
+    // Itens
+    _itensNaoEncontrados = 0;
+    _itensAutoCriados = 0;
+    if (itensXml != null) {
+      _itens = itensXml.map((item) {
+        final map = item as Map<String, dynamic>;
+        var produtoId = map['produto_id'] as int? ?? 0;
+        final descricao = map['produto_descricao']?.toString() ??
+            map['descricao_nfe']?.toString() ?? '';
+        final quantidade = (map['quantidade'] as num?)?.toDouble() ?? 0;
+        final precoUnitario = (map['preco_unitario'] as num?)?.toDouble() ?? 0;
+        final autoCriado = map['auto_criado'] == true;
+
+        // Verificar se o produto existe na lista carregada do dropdown
+        if (produtoId != 0 && !_produtos.any((p) => p.id == produtoId)) {
+          produtoId = 0; // Reset para forçar seleção manual
+        }
+
+        if (produtoId == 0) _itensNaoEncontrados++;
+        if (autoCriado) _itensAutoCriados++;
+
+        return _ItemCompra(
+          produtoId: produtoId,
+          descricao: descricao,
+          quantidade: quantidade,
+          precoUnitario: precoUnitario,
+          descricaoNfe: map['descricao_nfe']?.toString(),
+          codigoBarras: map['codigo_barras']?.toString(),
+        );
+      }).toList();
+    }
+
+    // Totais
+    if (totais != null) {
+      final valorNota = (totais['valor_nota'] as num?)?.toDouble() ?? 0;
+      if (valorNota > 0) {
+        _valorFinalCtrl.text = valorNota.toStringAsFixed(2);
+      }
+    }
+
+    // Info da NF-e para observações
+    final obsPartes = <String>[];
+    if (nfe != null && nfe['numero'] != null) {
+      obsPartes.add('NF-e: ${nfe['numero']} Serie: ${nfe['serie']}');
+    }
+    if (obsPartes.isNotEmpty) {
+      _observacoesCtrl.text = obsPartes.join('\n');
+    }
+
+    _xmlImportado = true;
+
+    setState(() {});
   }
 
   Future<void> _selecionarData() async {
@@ -560,6 +719,7 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
       'chave_nfe': _chaveNfeCtrl.text.trim().isEmpty
           ? null
           : _chaveNfeCtrl.text.trim(),
+      'xml_importado': _xmlImportado,
       'observacoes': _observacoesCtrl.text.trim().isEmpty
           ? null
           : _observacoesCtrl.text.trim(),
@@ -613,8 +773,17 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
                       padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
                       child: Row(
                         children: [
+                          if (_xmlImportado) ...[
+                            Icon(Icons.upload_file,
+                                color: AppTheme.accent, size: 22),
+                            SizedBox(width: 8),
+                          ],
                           Text(
-                            _isEditing ? 'Editar Compra' : 'Nova Compra',
+                            _isEditing
+                                ? 'Editar Compra'
+                                : _xmlImportado
+                                    ? 'Importar NF-e'
+                                    : 'Nova Compra',
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w600,
@@ -630,6 +799,73 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
                         ],
                       ),
                     ),
+                    // XML import status banners
+                    if (_xmlImportado && _itensAutoCriados > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.greenSuccess.withOpacity(0.12),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusSm),
+                            border: Border.all(
+                                color:
+                                    AppTheme.greenSuccess.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.check_circle_outline,
+                                  color: AppTheme.greenSuccess, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$_itensAutoCriados ${_itensAutoCriados == 1 ? 'produto criado' : 'produtos criados'} '
+                                  'automaticamente a partir da NF-e.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.greenSuccess,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    if (_xmlImportado && _itensNaoEncontrados > 0)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 8, 24, 0),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: AppTheme.yellowWarning.withOpacity(0.12),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.radiusSm),
+                            border: Border.all(
+                                color:
+                                    AppTheme.yellowWarning.withOpacity(0.3)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.warning_amber_rounded,
+                                  color: AppTheme.yellowWarning, size: 18),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '$_itensNaoEncontrados ${_itensNaoEncontrados == 1 ? 'item nao encontrado' : 'itens nao encontrados'} '
+                                  'pelo codigo de barras. Selecione os produtos manualmente.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: AppTheme.yellowWarning,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     SizedBox(height: 16),
 
                     // Content
@@ -854,7 +1090,9 @@ class _CompraFormDialogState extends State<_CompraFormDialog> {
             child: DropdownButtonFormField<int>(
               value: item.produtoId == 0 ? null : item.produtoId,
               decoration: InputDecoration(
-                labelText: 'Produto',
+                labelText: item.descricaoNfe != null && item.produtoId == 0
+                    ? 'Produto - NF-e: ${item.descricaoNfe}'
+                    : 'Produto',
                 isDense: true,
                 contentPadding:
                     const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1018,12 +1256,16 @@ class _ItemCompra {
   String descricao;
   double quantidade;
   double precoUnitario;
+  String? descricaoNfe;
+  String? codigoBarras;
 
   _ItemCompra({
     required this.produtoId,
     required this.descricao,
     required this.quantidade,
     required this.precoUnitario,
+    this.descricaoNfe,
+    this.codigoBarras,
   });
 
   double get total => quantidade * precoUnitario;

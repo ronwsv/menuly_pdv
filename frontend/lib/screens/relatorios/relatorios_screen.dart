@@ -7,6 +7,9 @@ import '../../providers/auth_provider.dart';
 import '../../providers/vendas_provider.dart';
 import '../../providers/produtos_provider.dart';
 import '../../providers/estoque_provider.dart';
+import '../../providers/relatorios_provider.dart';
+import '../../providers/configuracoes_provider.dart';
+import '../../models/configuracao.dart';
 
 class RelatoriosScreen extends StatefulWidget {
   RelatoriosScreen({super.key});
@@ -29,7 +32,12 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   bool _loadingRanking = false;
   String _rankingPeriodo = '30';
 
-  static const _sections = ['Vendas', 'Produtos', 'Estoque'];
+  // Comissões state
+  int? _comissaoVendedorId;
+  String _comissaoPeriodo = '30';
+  List<Usuario> _vendedores = [];
+
+  static const _sections = ['Vendas', 'Produtos', 'Estoque', 'Comissoes'];
   static const _produtoSubTabs = [
     'Listagem Atual',
     'Listagem Detalhada',
@@ -45,15 +53,60 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
   }
 
   void _carregarDados() {
-    final vendasProvider = context.read<VendasProvider>();
-    final produtosProvider = context.read<ProdutosProvider>();
-    final estoqueProvider = context.read<EstoqueProvider>();
+    _carregarSecaoAtual();
+  }
 
-    vendasProvider.carregarVendas();
-    produtosProvider.carregarProdutos();
-    estoqueProvider.carregarAbaixoMinimo();
-    estoqueProvider.carregarPosicao();
-    _carregarRankings();
+  void _carregarSecaoAtual() {
+    switch (_selectedSection) {
+      case 0: // Vendas
+        context.read<VendasProvider>().carregarVendas();
+        break;
+      case 1: // Produtos
+        context.read<ProdutosProvider>().carregarProdutos();
+        _carregarRankings();
+        break;
+      case 2: // Estoque
+        context.read<EstoqueProvider>().carregarAbaixoMinimo();
+        context.read<EstoqueProvider>().carregarPosicao();
+        break;
+      case 3: // Comissões
+        _carregarComissoes();
+        _carregarVendedores();
+        break;
+    }
+  }
+
+  void _carregarVendedores() async {
+    try {
+      final configProvider = context.read<ConfiguracoesProvider>();
+      await configProvider.carregarUsuarios();
+      if (mounted) {
+        setState(() {
+          _vendedores = configProvider.usuarios;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _carregarComissoes() async {
+    final now = DateTime.now();
+    final days = int.tryParse(_comissaoPeriodo) ?? 30;
+    final inicio = now.subtract(Duration(days: days));
+    final dataInicio = inicio.toIso8601String().split('T').first;
+    final dataFim = '${now.toIso8601String().split('T').first} 23:59:59';
+
+    final provider = context.read<RelatoriosProvider>();
+    // Load sequentially to avoid race condition on _isLoadingComissoes
+    await provider.carregarComissoes(
+      vendedorId: _comissaoVendedorId,
+      dataInicio: _comissaoPeriodo == 'all' ? null : dataInicio,
+      dataFim: _comissaoPeriodo == 'all' ? null : dataFim,
+    );
+    await provider.carregarResumoComissoes(
+      vendedorId: _comissaoVendedorId,
+      dataInicio: _comissaoPeriodo == 'all' ? null : dataInicio,
+      dataFim: _comissaoPeriodo == 'all' ? null : dataFim,
+    );
   }
 
   Future<void> _carregarRankings() async {
@@ -128,7 +181,10 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
           child: ChoiceChip(
             label: Text(_sections[index]),
             selected: selected,
-            onSelected: (_) => setState(() => _selectedSection = index),
+            onSelected: (_) {
+              setState(() => _selectedSection = index);
+              _carregarSecaoAtual();
+            },
             selectedColor: AppTheme.primary,
             backgroundColor: AppTheme.cardSurface,
             labelStyle: TextStyle(
@@ -156,6 +212,8 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         return _buildProdutosSection();
       case 2:
         return _buildEstoqueSection();
+      case 3:
+        return _buildComissoesSection();
       default:
         return const SizedBox.shrink();
     }
@@ -722,6 +780,281 @@ class _RelatoriosScreenState extends State<RelatoriosScreen> {
         ),
       ],
     );
+  }
+
+  // ---------------------------------------------------------------------------
+  // COMISSOES SECTION
+  // ---------------------------------------------------------------------------
+
+  Widget _buildComissoesSection() {
+    return Consumer<RelatoriosProvider>(
+      builder: (context, provider, _) {
+        if (provider.isLoadingComissoes) {
+          return Center(child: CircularProgressIndicator());
+        }
+
+        final resumo = provider.resumoComissoes;
+        final comissoes = provider.comissoes;
+
+        // Totals from resumo
+        double totalComissao = 0;
+        double totalVendido = 0;
+        int totalVendas = 0;
+        for (final r in resumo) {
+          totalComissao += _parseDouble(r['total_comissao']);
+          totalVendido += _parseDouble(r['total_vendido']);
+          totalVendas += (_parseInt(r['total_vendas']));
+        }
+
+        return SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Filters
+              Row(
+                children: [
+                  // Vendedor dropdown
+                  SizedBox(
+                    width: 200,
+                    child: DropdownButtonFormField<int?>(
+                      value: _comissaoVendedorId,
+                      decoration: InputDecoration(
+                        labelText: 'Vendedor',
+                        isDense: true,
+                        contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                      dropdownColor: AppTheme.cardSurface,
+                      style: TextStyle(color: AppTheme.textPrimary, fontSize: 14),
+                      items: [
+                        DropdownMenuItem<int?>(value: null, child: Text('Todos')),
+                        ..._vendedores.map((u) => DropdownMenuItem<int?>(
+                          value: u.id,
+                          child: Text(u.nome),
+                        )),
+                      ],
+                      onChanged: (v) {
+                        setState(() => _comissaoVendedorId = v);
+                        _carregarComissoes();
+                      },
+                    ),
+                  ),
+                  SizedBox(width: 16),
+                  // Period
+                  Text('Periodo:', style: TextStyle(fontSize: 14, color: AppTheme.textSecondary)),
+                  SizedBox(width: 8),
+                  ...[('7', '7 dias'), ('30', '30 dias'), ('90', '90 dias'), ('all', 'Todos')].map((p) {
+                    final selected = _comissaoPeriodo == p.$1;
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: OutlinedButton(
+                        onPressed: () {
+                          setState(() => _comissaoPeriodo = p.$1);
+                          _carregarComissoes();
+                        },
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor: selected ? AppTheme.primary : Colors.transparent,
+                          foregroundColor: selected ? Colors.white : AppTheme.textSecondary,
+                          side: BorderSide(color: selected ? AppTheme.primary : AppTheme.border),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        ),
+                        child: Text(p.$2),
+                      ),
+                    );
+                  }),
+                ],
+              ),
+              SizedBox(height: 16),
+
+              // Summary cards
+              Row(
+                children: [
+                  _StatCard(
+                    label: 'Total Comissoes',
+                    value: _currencyFormat.format(totalComissao),
+                    icon: Icons.payments_outlined,
+                    color: AppTheme.accent,
+                  ),
+                  SizedBox(width: 16),
+                  _StatCard(
+                    label: 'Total Vendido',
+                    value: _currencyFormat.format(totalVendido),
+                    icon: Icons.attach_money,
+                    color: AppTheme.greenSuccess,
+                  ),
+                  SizedBox(width: 16),
+                  _StatCard(
+                    label: 'Vendas com Comissao',
+                    value: totalVendas.toString(),
+                    icon: Icons.receipt_long_outlined,
+                    color: AppTheme.yellowWarning,
+                  ),
+                ],
+              ),
+              SizedBox(height: 20),
+
+              // Resumo por vendedor
+              if (resumo.isNotEmpty) ...[
+                Text(
+                  'Resumo por Vendedor',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(AppTheme.scaffoldBackground),
+                    dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+                    border: TableBorder.all(color: AppTheme.border, width: 0.5),
+                    columns: [
+                      DataColumn(label: Text('Vendedor')),
+                      DataColumn(label: Text('Vendas'), numeric: true),
+                      DataColumn(label: Text('Total Vendido'), numeric: true),
+                      DataColumn(label: Text('% Medio'), numeric: true),
+                      DataColumn(label: Text('Comissao'), numeric: true),
+                    ],
+                    rows: resumo.map((r) {
+                      return DataRow(cells: [
+                        DataCell(Text(
+                          r['vendedor_nome']?.toString() ?? '',
+                          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+                        )),
+                        DataCell(Text(
+                          r['total_vendas']?.toString() ?? '0',
+                          style: TextStyle(color: AppTheme.textPrimary),
+                        )),
+                        DataCell(Text(
+                          _currencyFormat.format(_parseDouble(r['total_vendido'])),
+                          style: TextStyle(color: AppTheme.greenSuccess),
+                        )),
+                        DataCell(Text(
+                          '${_parseDouble(r['percentual_medio']).toStringAsFixed(1)}%',
+                          style: TextStyle(color: AppTheme.textSecondary),
+                        )),
+                        DataCell(Text(
+                          _currencyFormat.format(_parseDouble(r['total_comissao'])),
+                          style: TextStyle(color: AppTheme.accent, fontWeight: FontWeight.w600),
+                        )),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+                SizedBox(height: 20),
+              ],
+
+              // Detalhamento
+              Text(
+                'Detalhamento',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.textPrimary,
+                ),
+              ),
+              SizedBox(height: 12),
+
+              if (comissoes.isEmpty)
+                const _EmptyState(message: 'Nenhuma comissao no periodo selecionado')
+              else
+                SizedBox(
+                  width: double.infinity,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(AppTheme.scaffoldBackground),
+                    dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+                    border: TableBorder.all(color: AppTheme.border, width: 0.5),
+                    columns: [
+                      DataColumn(label: Text('Venda')),
+                      DataColumn(label: Text('Vendedor')),
+                      DataColumn(label: Text('Valor Venda'), numeric: true),
+                      DataColumn(label: Text('%'), numeric: true),
+                      DataColumn(label: Text('Comissao'), numeric: true),
+                      DataColumn(label: Text('Status')),
+                      DataColumn(label: Text('Data')),
+                    ],
+                    rows: comissoes.map((c) {
+                      String formattedDate = '';
+                      final criadoEm = c['criado_em']?.toString() ?? '';
+                      if (criadoEm.isNotEmpty) {
+                        try {
+                          formattedDate = _dateFormat.format(DateTime.parse(criadoEm));
+                        } catch (_) {
+                          formattedDate = criadoEm;
+                        }
+                      }
+                      final status = c['status']?.toString() ?? 'ativa';
+                      final isAtiva = status == 'ativa';
+
+                      return DataRow(cells: [
+                        DataCell(Text(
+                          '#${c['venda_numero'] ?? c['venda_id']}',
+                          style: TextStyle(color: AppTheme.textPrimary, fontWeight: FontWeight.w600),
+                        )),
+                        DataCell(Text(
+                          c['vendedor_nome']?.toString() ?? '',
+                          style: TextStyle(color: AppTheme.textPrimary),
+                        )),
+                        DataCell(Text(
+                          _currencyFormat.format(_parseDouble(c['valor_venda'])),
+                          style: TextStyle(color: AppTheme.textPrimary),
+                        )),
+                        DataCell(Text(
+                          '${_parseDouble(c['percentual']).toStringAsFixed(1)}%',
+                          style: TextStyle(color: AppTheme.textSecondary),
+                        )),
+                        DataCell(Text(
+                          _currencyFormat.format(_parseDouble(c['valor_comissao'])),
+                          style: TextStyle(
+                            color: isAtiva ? AppTheme.accent : AppTheme.textMuted,
+                            fontWeight: FontWeight.w600,
+                            decoration: isAtiva ? null : TextDecoration.lineThrough,
+                          ),
+                        )),
+                        DataCell(Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(
+                            color: isAtiva
+                                ? AppTheme.greenSuccess.withOpacity(0.15)
+                                : AppTheme.error.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(AppTheme.radiusSm),
+                          ),
+                          child: Text(
+                            status,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: isAtiva ? AppTheme.greenSuccess : AppTheme.error,
+                            ),
+                          ),
+                        )),
+                        DataCell(Text(
+                          formattedDate,
+                          style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+                        )),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  static double _parseDouble(dynamic v) {
+    if (v == null) return 0.0;
+    if (v is double) return v;
+    if (v is int) return v.toDouble();
+    return double.tryParse(v.toString()) ?? 0.0;
+  }
+
+  static int _parseInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    return int.tryParse(v.toString()) ?? 0;
   }
 
   // ---------------------------------------------------------------------------

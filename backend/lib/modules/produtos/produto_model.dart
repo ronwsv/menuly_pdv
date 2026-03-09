@@ -12,6 +12,7 @@ class Produto {
   final double precoVenda;
   final double? margemLucro;
   final String unidade;
+  final String? tamanho;
   final int estoqueAtual;
   final int estoqueMinimo;
   final String? imagemPath;
@@ -20,6 +21,7 @@ class Produto {
   final String? categoriaNome;
   final String? fornecedorNome;
   final bool bloqueado;
+  final bool isCombo;
   final DateTime? criadoEm;
   final DateTime? atualizadoEm;
 
@@ -37,6 +39,7 @@ class Produto {
     required this.precoVenda,
     this.margemLucro,
     required this.unidade,
+    this.tamanho,
     required this.estoqueAtual,
     required this.estoqueMinimo,
     this.imagemPath,
@@ -45,6 +48,7 @@ class Produto {
     this.fornecedorNome,
     this.ativo = true,
     this.bloqueado = false,
+    this.isCombo = false,
     this.criadoEm,
     this.atualizadoEm,
   });
@@ -70,6 +74,7 @@ class Produto {
           ? double.parse(row['margem_lucro']!)
           : null,
       unidade: row['unidade'] ?? 'un',
+      tamanho: row['tamanho'],
       estoqueAtual: int.parse(row['estoque_atual'] ?? '0'),
       estoqueMinimo: int.parse(row['estoque_minimo'] ?? '0'),
       imagemPath: row['imagem_path'],
@@ -78,6 +83,7 @@ class Produto {
       fornecedorNome: row['fornecedor_nome'],
       ativo: row['ativo'] == '1',
       bloqueado: row['bloqueado'] == '1',
+      isCombo: row['is_combo'] == '1',
       criadoEm:
           row['criado_em'] != null ? DateTime.parse(row['criado_em']!) : null,
       atualizadoEm: row['atualizado_em'] != null
@@ -103,12 +109,14 @@ class Produto {
       'preco_venda': precoVenda,
       'margem_lucro': margemLucro,
       'unidade': unidade,
+      'tamanho': tamanho,
       'estoque_atual': estoqueAtual,
       'estoque_minimo': estoqueMinimo,
       'imagem_path': imagemPath,
       'thumbnail_path': thumbnailPath,
       'ativo': ativo,
       'bloqueado': bloqueado,
+      'is_combo': isCombo,
       'criado_em': criadoEm?.toIso8601String(),
       'atualizado_em': atualizadoEm?.toIso8601String(),
     };

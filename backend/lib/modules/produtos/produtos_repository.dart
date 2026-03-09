@@ -1,5 +1,6 @@
 import '../../config/database.dart';
 
+import 'combo_item_model.dart';
 import 'produto_model.dart';
 
 class ProdutosRepository {
@@ -8,6 +9,7 @@ class ProdutosRepository {
     String? busca,
     int? categoriaId,
     bool? ativo,
+    String? tamanho,
     int limit = 50,
     int offset = 0,
   }) async {
@@ -32,6 +34,11 @@ class ProdutosRepository {
       params['ativo'] = ativo ? '1' : '0';
     }
 
+    if (tamanho != null && tamanho.isNotEmpty) {
+      where += ' AND p.tamanho = :tamanho';
+      params['tamanho'] = tamanho;
+    }
+
     final sql =
         'SELECT p.*, c.nome AS categoria_nome, f.razao_social AS fornecedor_nome '
         'FROM produtos p '
@@ -47,6 +54,7 @@ class ProdutosRepository {
     String? busca,
     int? categoriaId,
     bool? ativo,
+    String? tamanho,
   }) async {
     var where = 'WHERE 1=1';
     final params = <String, String>{};
@@ -67,6 +75,11 @@ class ProdutosRepository {
     if (ativo != null) {
       where += ' AND ativo = :ativo';
       params['ativo'] = ativo ? '1' : '0';
+    }
+
+    if (tamanho != null && tamanho.isNotEmpty) {
+      where += ' AND tamanho = :tamanho';
+      params['tamanho'] = tamanho;
     }
 
     final sql = 'SELECT COUNT(*) as total FROM produtos $where';
@@ -198,5 +211,57 @@ class ProdutosRepository {
       },
     );
     return results;
+  }
+
+  // ── Combo methods ──────────────────────────────────────────
+
+  Future<List<ComboItem>> findComboItens(int comboId) async {
+    final results = await Database.instance.query(
+      'SELECT ci.*, p.descricao AS produto_descricao, '
+      'p.preco_venda AS produto_preco_venda, '
+      'p.preco_custo AS produto_preco_custo, '
+      'p.estoque_atual AS produto_estoque_atual '
+      'FROM combo_itens ci '
+      'JOIN produtos p ON ci.produto_id = p.id '
+      'WHERE ci.combo_id = :combo_id '
+      'ORDER BY p.descricao',
+      {'combo_id': comboId.toString()},
+    );
+    return results.map((row) => ComboItem.fromRow(row)).toList();
+  }
+
+  Future<void> replaceComboItens(
+      int comboId, List<Map<String, dynamic>> itens) async {
+    await Database.instance.transaction(() async {
+      await Database.instance.execute(
+        'DELETE FROM combo_itens WHERE combo_id = :combo_id',
+        {'combo_id': comboId.toString()},
+      );
+      for (final item in itens) {
+        final produtoId = item['produto_id'];
+        final quantidade = item['quantidade'] ?? 1;
+        await Database.instance.execute(
+          'INSERT INTO combo_itens (combo_id, produto_id, quantidade) '
+          'VALUES (:combo_id, :produto_id, :quantidade)',
+          {
+            'combo_id': comboId.toString(),
+            'produto_id': produtoId.toString(),
+            'quantidade': quantidade.toString(),
+          },
+        );
+      }
+    });
+  }
+
+  Future<int> calcularEstoqueCombo(int comboId) async {
+    final results = await Database.instance.query(
+      'SELECT MIN(FLOOR(p.estoque_atual / ci.quantidade)) AS estoque_disponivel '
+      'FROM combo_itens ci '
+      'JOIN produtos p ON ci.produto_id = p.id '
+      'WHERE ci.combo_id = :combo_id',
+      {'combo_id': comboId.toString()},
+    );
+    if (results.isEmpty) return 0;
+    return int.tryParse(results.first['estoque_disponivel'] ?? '0') ?? 0;
   }
 }

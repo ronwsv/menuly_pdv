@@ -70,4 +70,55 @@ class VendasController {
     final venda = await _service.converterOrcamento(id, body, userId);
     return JsonResponse.created(venda);
   }
+
+  Future<Response> listarComissoes(Request request) async {
+    final queryParams = request.url.queryParameters;
+    final page = int.tryParse(queryParams['page'] ?? '1') ?? 1;
+    final perPage = int.tryParse(queryParams['per_page'] ?? '50') ?? 50;
+    final offset = (page - 1) * perPage;
+
+    final params = <String, dynamic>{
+      'limit': perPage,
+      'offset': offset,
+    };
+
+    if (queryParams['vendedor_id'] != null) {
+      params['vendedor_id'] = int.tryParse(queryParams['vendedor_id']!);
+    }
+    if (queryParams['data_inicio'] != null) {
+      params['data_inicio'] = queryParams['data_inicio'];
+    }
+    if (queryParams['data_fim'] != null) {
+      params['data_fim'] = queryParams['data_fim'];
+    }
+    if (queryParams['status'] != null) {
+      params['status'] = queryParams['status'];
+    }
+
+    final result = await _service.listarComissoes(params);
+    return JsonResponse.paginated(
+      result['items'] as List,
+      result['total'] as int,
+      page,
+      perPage,
+    );
+  }
+
+  Future<Response> resumoComissoes(Request request) async {
+    final queryParams = request.url.queryParameters;
+    final params = <String, dynamic>{};
+
+    if (queryParams['vendedor_id'] != null) {
+      params['vendedor_id'] = int.tryParse(queryParams['vendedor_id']!);
+    }
+    if (queryParams['data_inicio'] != null) {
+      params['data_inicio'] = queryParams['data_inicio'];
+    }
+    if (queryParams['data_fim'] != null) {
+      params['data_fim'] = queryParams['data_fim'];
+    }
+
+    final result = await _service.resumoComissoes(params);
+    return JsonResponse.ok(result);
+  }
 }

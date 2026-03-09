@@ -160,6 +160,9 @@ class _EstoqueScreenState extends State<EstoqueScreen>
 // -- Posicao tab --
 
 class _PosicaoTab extends StatelessWidget {
+  final _verticalController = ScrollController();
+  final _horizontalController = ScrollController();
+
   @override
   Widget build(BuildContext context) {
     return Consumer<EstoqueProvider>(
@@ -177,51 +180,74 @@ class _PosicaoTab extends StatelessWidget {
           return const _EmptyState(message: 'Nenhum produto em estoque');
         }
 
-        return SingleChildScrollView(
-          child: SizedBox(
-            width: double.infinity,
-            child: DataTable(
-              headingRowColor:
-                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
-              dataRowColor:
-                  WidgetStateProperty.all(AppTheme.cardSurface),
-              border: TableBorder.all(color: AppTheme.border, width: 0.5),
-              columns: [
-                DataColumn(label: Text('Produto')),
-                DataColumn(
-                    label: Text('Estoque Atual'), numeric: true),
-                DataColumn(
-                    label: Text('Estoque Minimo'), numeric: true),
-                DataColumn(label: Text('Status')),
-              ],
-              rows: provider.posicao.map((item) {
-                final atual = (item['estoque_atual'] ?? 0) as num;
-                final minimo = (item['estoque_minimo'] ?? 0) as num;
-                final isBaixo = minimo > 0 && atual < minimo;
+        return Scrollbar(
+          controller: _verticalController,
+          thumbVisibility: true,
+          child: Scrollbar(
+            controller: _horizontalController,
+            thumbVisibility: true,
+            notificationPredicate: (notification) => notification.depth == 1,
+            child: SingleChildScrollView(
+              controller: _verticalController,
+              child: SingleChildScrollView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 340,
+                  ),
+                  child: DataTable(
+                    headingRowColor:
+                        WidgetStateProperty.all(AppTheme.scaffoldBackground),
+                    dataRowColor:
+                        WidgetStateProperty.all(AppTheme.cardSurface),
+                    border: TableBorder.all(color: AppTheme.border, width: 0.5),
+                    columns: [
+                      DataColumn(label: Text('Produto')),
+                      DataColumn(
+                          label: Text('Est. Atual'), numeric: true),
+                      DataColumn(
+                          label: Text('Est. Mínimo'), numeric: true),
+                      DataColumn(label: Text('Status')),
+                    ],
+                    rows: provider.posicao.map((item) {
+                      final atual = (item['estoque_atual'] ?? 0) as num;
+                      final minimo = (item['estoque_minimo'] ?? 0) as num;
+                      final isBaixo = minimo > 0 && atual < minimo;
+                      final descricao = item['descricao']?.toString() ?? '';
 
-                return DataRow(cells: [
-                  DataCell(Text(
-                    item['descricao']?.toString() ?? '',
-                    style:
-                        TextStyle(color: AppTheme.textPrimary),
-                  )),
-                  DataCell(Text(
-                    atual.toString(),
-                    style: TextStyle(
-                      color: isBaixo
-                          ? AppTheme.error
-                          : AppTheme.textPrimary,
-                      fontWeight: isBaixo ? FontWeight.w600 : null,
-                    ),
-                  )),
-                  DataCell(Text(
-                    minimo.toString(),
-                    style:
-                        TextStyle(color: AppTheme.textPrimary),
-                  )),
-                  DataCell(_StatusBadge(isLow: isBaixo)),
-                ]);
-              }).toList(),
+                      return DataRow(cells: [
+                        DataCell(Tooltip(
+                          message: descricao,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: 250),
+                            child: Text(
+                              descricao,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppTheme.textPrimary),
+                            ),
+                          ),
+                        )),
+                        DataCell(Text(
+                          atual.toString(),
+                          style: TextStyle(
+                            color: isBaixo
+                                ? AppTheme.error
+                                : AppTheme.textPrimary,
+                            fontWeight: isBaixo ? FontWeight.w600 : null,
+                          ),
+                        )),
+                        DataCell(Text(
+                          minimo.toString(),
+                          style:
+                              TextStyle(color: AppTheme.textPrimary),
+                        )),
+                        DataCell(_StatusBadge(isLow: isBaixo)),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -233,6 +259,9 @@ class _PosicaoTab extends StatelessWidget {
 // -- Abaixo Minimo tab --
 
 class _AbaixoMinimoTab extends StatelessWidget {
+  final _verticalController = ScrollController();
+  final _horizontalController = ScrollController();
+
   @override
   Widget build(BuildContext context) {
     return Consumer<EstoqueProvider>(
@@ -254,47 +283,70 @@ class _AbaixoMinimoTab extends StatelessWidget {
           );
         }
 
-        return SingleChildScrollView(
-          child: SizedBox(
-            width: double.infinity,
-            child: DataTable(
-              headingRowColor:
-                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
-              dataRowColor:
-                  WidgetStateProperty.all(AppTheme.cardSurface),
-              border: TableBorder.all(color: AppTheme.border, width: 0.5),
-              columns: [
-                DataColumn(label: Text('Produto')),
-                DataColumn(
-                    label: Text('Estoque Atual'), numeric: true),
-                DataColumn(
-                    label: Text('Estoque Minimo'), numeric: true),
-                DataColumn(label: Text('Status')),
-              ],
-              rows: provider.abaixoMinimo.map((item) {
-                final atual = (item['estoque_atual'] ?? 0) as num;
-                final minimo = (item['estoque_minimo'] ?? 0) as num;
+        return Scrollbar(
+          controller: _verticalController,
+          thumbVisibility: true,
+          child: Scrollbar(
+            controller: _horizontalController,
+            thumbVisibility: true,
+            notificationPredicate: (notification) => notification.depth == 1,
+            child: SingleChildScrollView(
+              controller: _verticalController,
+              child: SingleChildScrollView(
+                controller: _horizontalController,
+                scrollDirection: Axis.horizontal,
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minWidth: MediaQuery.of(context).size.width - 340,
+                  ),
+                  child: DataTable(
+                    headingRowColor:
+                        WidgetStateProperty.all(AppTheme.scaffoldBackground),
+                    dataRowColor:
+                        WidgetStateProperty.all(AppTheme.cardSurface),
+                    border: TableBorder.all(color: AppTheme.border, width: 0.5),
+                    columns: [
+                      DataColumn(label: Text('Produto')),
+                      DataColumn(
+                          label: Text('Est. Atual'), numeric: true),
+                      DataColumn(
+                          label: Text('Est. Mínimo'), numeric: true),
+                      DataColumn(label: Text('Status')),
+                    ],
+                    rows: provider.abaixoMinimo.map((item) {
+                      final atual = (item['estoque_atual'] ?? 0) as num;
+                      final minimo = (item['estoque_minimo'] ?? 0) as num;
+                      final descricao = item['descricao']?.toString() ?? '';
 
-                return DataRow(cells: [
-                  DataCell(Text(
-                    item['descricao']?.toString() ?? '',
-                    style:
-                        TextStyle(color: AppTheme.textPrimary),
-                  )),
-                  DataCell(Text(
-                    atual.toString(),
-                    style: TextStyle(
-                        color: AppTheme.error,
-                        fontWeight: FontWeight.w600),
-                  )),
-                  DataCell(Text(
-                    minimo.toString(),
-                    style:
-                        TextStyle(color: AppTheme.textPrimary),
-                  )),
-                  DataCell(const _StatusBadge(isLow: true)),
-                ]);
-              }).toList(),
+                      return DataRow(cells: [
+                        DataCell(Tooltip(
+                          message: descricao,
+                          child: ConstrainedBox(
+                            constraints: BoxConstraints(maxWidth: 250),
+                            child: Text(
+                              descricao,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: AppTheme.textPrimary),
+                            ),
+                          ),
+                        )),
+                        DataCell(Text(
+                          atual.toString(),
+                          style: TextStyle(
+                              color: AppTheme.error,
+                              fontWeight: FontWeight.w600),
+                        )),
+                        DataCell(Text(
+                          minimo.toString(),
+                          style:
+                              TextStyle(color: AppTheme.textPrimary),
+                        )),
+                        DataCell(const _StatusBadge(isLow: true)),
+                      ]);
+                    }).toList(),
+                  ),
+                ),
+              ),
             ),
           ),
         );
@@ -397,7 +449,9 @@ class _HistoricoTabState extends State<_HistoricoTab> {
         border: Border.all(color: AppTheme.border),
         borderRadius: BorderRadius.circular(AppTheme.radiusMd),
       ),
-      child: Row(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
         children: [
           // Tipo
           SizedBox(
@@ -530,8 +584,12 @@ class _HistoricoTabState extends State<_HistoricoTab> {
           ),
         ],
       ),
+      ),
     );
   }
+
+  final _verticalController = ScrollController();
+  final _horizontalController = ScrollController();
 
   Widget _buildContent(EstoqueProvider provider) {
     if (provider.isLoading) {
@@ -548,89 +606,120 @@ class _HistoricoTabState extends State<_HistoricoTab> {
           message: 'Nenhum historico de movimentacao');
     }
 
-    return SingleChildScrollView(
-      child: SizedBox(
-        width: double.infinity,
-        child: DataTable(
-          headingRowColor:
-              WidgetStateProperty.all(AppTheme.scaffoldBackground),
-          dataRowColor:
-              WidgetStateProperty.all(AppTheme.cardSurface),
-          border: TableBorder.all(color: AppTheme.border, width: 0.5),
-          columns: [
-            DataColumn(label: Text('Data')),
-            DataColumn(label: Text('Produto')),
-            DataColumn(label: Text('Tipo')),
-            DataColumn(label: Text('Ocorrencia')),
-            DataColumn(label: Text('Quantidade'), numeric: true),
-            DataColumn(label: Text('Observacoes')),
-          ],
-          rows: provider.historico.map((item) {
-            String formattedDate = '';
-            final raw = item['criado_em']?.toString() ?? '';
-            if (raw.isNotEmpty) {
-              try {
-                formattedDate =
-                    widget.dateFormat.format(DateTime.parse(raw));
-              } catch (_) {
-                formattedDate = raw;
-              }
-            }
+    return Scrollbar(
+      controller: _verticalController,
+      thumbVisibility: true,
+      child: Scrollbar(
+        controller: _horizontalController,
+        thumbVisibility: true,
+        notificationPredicate: (notification) => notification.depth == 1,
+        child: SingleChildScrollView(
+          controller: _verticalController,
+          child: SingleChildScrollView(
+            controller: _horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minWidth: MediaQuery.of(context).size.width - 340,
+              ),
+              child: DataTable(
+                headingRowColor:
+                    WidgetStateProperty.all(AppTheme.scaffoldBackground),
+                dataRowColor:
+                    WidgetStateProperty.all(AppTheme.cardSurface),
+                border: TableBorder.all(color: AppTheme.border, width: 0.5),
+                columns: [
+                  DataColumn(label: Text('Data')),
+                  DataColumn(label: Text('Produto')),
+                  DataColumn(label: Text('Tipo')),
+                  DataColumn(label: Text('Ocorrência')),
+                  DataColumn(label: Text('Qtde'), numeric: true),
+                  DataColumn(label: Text('Observações')),
+                ],
+                rows: provider.historico.map((item) {
+                  String formattedDate = '';
+                  final raw = item['criado_em']?.toString() ?? '';
+                  if (raw.isNotEmpty) {
+                    try {
+                      formattedDate =
+                          widget.dateFormat.format(DateTime.parse(raw));
+                    } catch (_) {
+                      formattedDate = raw;
+                    }
+                  }
 
-            final tipo = item['tipo']?.toString() ?? '';
-            final isEntrada = tipo == 'entrada';
+                  final tipo = item['tipo']?.toString() ?? '';
+                  final isEntrada = tipo == 'entrada';
+                  final prodDesc = item['produto_descricao']?.toString() ?? '';
+                  final obs = item['observacoes']?.toString() ?? '';
 
-            return DataRow(cells: [
-              DataCell(Text(
-                formattedDate,
-                style: TextStyle(
-                    color: AppTheme.textPrimary, fontSize: 13),
-              )),
-              DataCell(Text(
-                item['produto_descricao']?.toString() ?? '',
-                style:
-                    TextStyle(color: AppTheme.textPrimary),
-              )),
-              DataCell(Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: (isEntrada
-                          ? AppTheme.greenSuccess
-                          : AppTheme.error)
-                      .withOpacity(0.15),
-                  borderRadius:
-                      BorderRadius.circular(AppTheme.radiusSm),
-                ),
-                child: Text(
-                  isEntrada ? 'Entrada' : 'Saida',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: isEntrada
-                        ? AppTheme.greenSuccess
-                        : AppTheme.error,
-                  ),
-                ),
-              )),
-              DataCell(Text(
-                _formatOcorrencia(
-                    item['ocorrencia']?.toString() ?? ''),
-                style: TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13),
-              )),
-              DataCell(Text(
-                (item['quantidade'] ?? '').toString(),
-                style:
-                    TextStyle(color: AppTheme.textPrimary),
-              )),
-              DataCell(Text(
-                item['observacoes']?.toString() ?? '',
-                style: TextStyle(
-                    color: AppTheme.textSecondary, fontSize: 13),
-              )),
-            ]);
-          }).toList(),
+                  return DataRow(cells: [
+                    DataCell(Text(
+                      formattedDate,
+                      style: TextStyle(
+                          color: AppTheme.textPrimary, fontSize: 13),
+                    )),
+                    DataCell(Tooltip(
+                      message: prodDesc,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 220),
+                        child: Text(
+                          prodDesc,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: AppTheme.textPrimary),
+                        ),
+                      ),
+                    )),
+                    DataCell(Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: (isEntrada
+                                ? AppTheme.greenSuccess
+                                : AppTheme.error)
+                            .withOpacity(0.15),
+                        borderRadius:
+                            BorderRadius.circular(AppTheme.radiusSm),
+                      ),
+                      child: Text(
+                        isEntrada ? 'Entrada' : 'Saida',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isEntrada
+                              ? AppTheme.greenSuccess
+                              : AppTheme.error,
+                        ),
+                      ),
+                    )),
+                    DataCell(Text(
+                      _formatOcorrencia(
+                          item['ocorrencia']?.toString() ?? ''),
+                      style: TextStyle(
+                          color: AppTheme.textSecondary, fontSize: 13),
+                    )),
+                    DataCell(Text(
+                      (item['quantidade'] ?? '').toString(),
+                      style:
+                          TextStyle(color: AppTheme.textPrimary),
+                    )),
+                    DataCell(Tooltip(
+                      message: obs,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: 200),
+                        child: Text(
+                          obs,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: AppTheme.textSecondary, fontSize: 13),
+                        ),
+                      ),
+                    )),
+                  ]);
+                }).toList(),
+              ),
+            ),
+          ),
         ),
       ),
     );

@@ -38,6 +38,7 @@ class AuthProvider extends ChangeNotifier {
   bool get permServicos => _permBool('perm_servicos');
   bool get permOrdensServico => _permBool('perm_ordens_servico');
   bool get permDevolucoes => _permBool('perm_devolucoes');
+  bool get permConsignacoes => _permBool('perm_consignacoes');
   bool get permRelatorios => _permBool('perm_relatorios');
   double get maxDesconto =>
       (_usuario?['max_desconto'] as num?)?.toDouble() ?? 0.0;
@@ -78,6 +79,7 @@ class AuthProvider extends ChangeNotifier {
       15 => permDevolucoes, // Devolucoes
       16 => permRelatorios, // Relatorios
       17 => false, // Configuracoes (admin only)
+      18 => permConsignacoes, // Consignacoes
       _ => false,
     };
   }
@@ -108,7 +110,8 @@ class AuthProvider extends ChangeNotifier {
           'perm_compras', 'perm_clientes', 'perm_fornecedores',
           'perm_categorias', 'perm_caixa', 'perm_contas_receber',
           'perm_contas_pagar', 'perm_crediario', 'perm_servicos',
-          'perm_ordens_servico', 'perm_devolucoes', 'perm_relatorios',
+          'perm_ordens_servico', 'perm_devolucoes', 'perm_consignacoes',
+          'perm_relatorios',
         ]) {
           usuario[key] = _normBool(usuario[key]);
         }

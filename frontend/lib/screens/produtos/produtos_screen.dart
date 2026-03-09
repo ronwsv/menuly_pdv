@@ -636,7 +636,7 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
   }
 
   Widget _buildProductCard(Produto produto) {
-    final isBaixo = produto.estoqueBaixo;
+    final isBaixo = produto.isCombo ? (produto.estoqueDisponivel ?? 0) == 0 : produto.estoqueBaixo;
 
     return MouseRegion(
       cursor: SystemMouseCursors.click,
@@ -672,18 +672,58 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Category
-                    if (produto.categoriaNome != null && produto.categoriaNome!.isNotEmpty)
-                      Text(
-                        produto.categoriaNome!,
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: Color(0xFF9575cd),
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+                    // Category + Combo badge
+                    Row(
+                      children: [
+                        if (produto.isCombo)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              'COMBO',
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.accent,
+                              ),
+                            ),
+                          ),
+                        if (produto.tamanho != null && produto.tamanho!.isNotEmpty)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppTheme.primary.withOpacity(0.12),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              produto.tamanho!,
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ),
+                        if (produto.categoriaNome != null && produto.categoriaNome!.isNotEmpty)
+                          Expanded(
+                            child: Text(
+                              produto.categoriaNome!,
+                              style: TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w500,
+                                color: Color(0xFF9575cd),
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                      ],
+                    ),
                     SizedBox(height: 4),
 
                     // Product name
@@ -726,7 +766,13 @@ class _ProdutosScreenState extends State<ProdutosScreen> {
                             color: AppTheme.greenSuccess,
                           ),
                         ),
-                        _StockBadge(isLow: isBaixo),
+                        if (produto.isCombo && produto.estoqueDisponivel != null)
+                          Text(
+                            'Est: ${produto.estoqueDisponivel}',
+                            style: TextStyle(fontSize: 11, color: isBaixo ? AppTheme.error : AppTheme.textMuted),
+                          )
+                        else
+                          _StockBadge(isLow: isBaixo),
                       ],
                     ),
                   ],

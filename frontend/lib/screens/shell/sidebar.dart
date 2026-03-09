@@ -66,7 +66,7 @@ class Sidebar extends StatelessWidget {
                   _MenuItem(icon: Icons.dashboard_outlined, label: 'Dashboard', index: 0, selected: selectedIndex == 0, onTap: onItemSelected),
                 if (auth.temPermissaoMenu(1))
                   _MenuItem(icon: Icons.point_of_sale, label: 'PDV - Frente de Caixa', index: 1, selected: false, onTap: onItemSelected),
-                if ([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].any((i) => auth.temPermissaoMenu(i))) ...[
+                if ([2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 18].any((i) => auth.temPermissaoMenu(i))) ...[
                   SizedBox(height: 8),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -101,6 +101,8 @@ class Sidebar extends StatelessWidget {
                   _MenuItem(icon: Icons.assignment_outlined, label: 'Ordens de Servico', index: 14, selected: selectedIndex == 14, onTap: onItemSelected),
                 if (auth.temPermissaoMenu(15))
                   _MenuItem(icon: Icons.swap_horiz_outlined, label: 'Trocas e Devoluções', index: 15, selected: selectedIndex == 15, onTap: onItemSelected),
+                if (auth.temPermissaoMenu(18))
+                  _MenuItem(icon: Icons.swap_vert_outlined, label: 'Consignações', index: 18, selected: selectedIndex == 18, onTap: onItemSelected),
                 if (auth.temPermissaoMenu(16) || auth.temPermissaoMenu(17)) ...[
                   SizedBox(height: 8),
                   Padding(

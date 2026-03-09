@@ -15,6 +15,7 @@ class ProdutosService {
     final busca = params['busca'] as String?;
     final categoriaId = params['categoria_id'] as int?;
     final ativo = params['ativo'] as bool?;
+    final tamanho = params['tamanho'] as String?;
     final limit = params['limit'] as int? ?? 50;
     final offset = params['offset'] as int? ?? 0;
 
@@ -22,6 +23,7 @@ class ProdutosService {
       busca: busca,
       categoriaId: categoriaId,
       ativo: ativo,
+      tamanho: tamanho,
       limit: limit,
       offset: offset,
     );
@@ -30,10 +32,22 @@ class ProdutosService {
       busca: busca,
       categoriaId: categoriaId,
       ativo: ativo,
+      tamanho: tamanho,
     );
 
+    // Calculate virtual stock for combos
+    final jsonItems = <Map<String, dynamic>>[];
+    for (final p in items) {
+      final json = p.toJson();
+      if (p.isCombo) {
+        json['estoque_disponivel'] =
+            await _repository.calcularEstoqueCombo(p.id!);
+      }
+      jsonItems.add(json);
+    }
+
     return {
-      'items': items.map((p) => p.toJson()).toList(),
+      'items': jsonItems,
       'total': total,
     };
   }
@@ -44,6 +58,19 @@ class ProdutosService {
       throw NotFoundException('Produto não encontrado');
     }
     return produto;
+  }
+
+  /// Returns produto JSON with combo details if applicable.
+  Future<Map<String, dynamic>> obterPorIdComDetalhes(int id) async {
+    final produto = await obterPorId(id);
+    final json = produto.toJson();
+    if (produto.isCombo) {
+      final comboItens = await _repository.findComboItens(id);
+      json['combo_itens'] = comboItens.map((c) => c.toJson()).toList();
+      json['estoque_disponivel'] =
+          await _repository.calcularEstoqueCombo(id);
+    }
+    return json;
   }
 
   Future<Produto> buscarPorCodigoBarras(String codigo) async {
@@ -126,6 +153,9 @@ class ProdutosService {
       dbData['margem_lucro'] = margemLucro.toStringAsFixed(2);
     }
     dbData['unidade'] = (data['unidade'] ?? 'un').toString();
+    if (data['tamanho'] != null && data['tamanho'].toString().isNotEmpty) {
+      dbData['tamanho'] = data['tamanho'].toString();
+    }
     dbData['estoque_atual'] = (data['estoque_atual'] ?? '0').toString();
     dbData['estoque_minimo'] = (data['estoque_minimo'] ?? '0').toString();
     if (data['imagem_path'] != null) {
@@ -137,7 +167,37 @@ class ProdutosService {
     dbData['ativo'] = (data['ativo'] ?? '1').toString();
     dbData['bloqueado'] = (data['bloqueado'] ?? '0').toString();
 
+    final isCombo = data['is_combo'] == true || data['is_combo'] == 1;
+    if (isCombo) {
+      dbData['is_combo'] = '1';
+      dbData['estoque_atual'] = '0';
+      dbData['estoque_minimo'] = '0';
+      dbData['unidade'] = (data['unidade'] ?? 'kit').toString();
+    }
+
+    // Validate combo components before creating
+    if (isCombo) {
+      if (data['combo_itens'] is! List ||
+          (data['combo_itens'] as List).isEmpty) {
+        throw ValidationException(
+            'Um combo deve ter pelo menos um componente');
+      }
+      final comboItens = (data['combo_itens'] as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+      await _validarComboItens(null, comboItens);
+    }
+
     final id = await _repository.create(dbData);
+
+    // Save combo components
+    if (isCombo) {
+      final comboItens = (data['combo_itens'] as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+      await _repository.replaceComboItens(id, comboItens);
+    }
+
     return obterPorId(id);
   }
 
@@ -160,6 +220,7 @@ class ProdutosService {
       'preco_custo',
       'preco_venda',
       'unidade',
+      'tamanho',
       'estoque_atual',
       'estoque_minimo',
       'imagem_path',
@@ -199,11 +260,84 @@ class ProdutosService {
       }
     }
 
+    // Handle is_combo field
+    if (data.containsKey('is_combo')) {
+      final isCombo = data['is_combo'] == true || data['is_combo'] == 1;
+      dbData['is_combo'] = isCombo ? '1' : '0';
+      if (isCombo) {
+        dbData['estoque_atual'] = '0';
+        dbData['estoque_minimo'] = '0';
+      }
+    }
+
     if (dbData.isNotEmpty) {
       await _repository.update(id, dbData);
     }
 
+    // Update combo components if provided (only for combos)
+    final isComboNow = data['is_combo'] == true || data['is_combo'] == 1;
+    if (data['combo_itens'] is List) {
+      if (!isComboNow) {
+        throw ValidationException(
+            'Não é possível definir componentes em um produto que não é combo');
+      }
+      final comboItens = (data['combo_itens'] as List)
+          .map((e) => e as Map<String, dynamic>)
+          .toList();
+      if (comboItens.isEmpty) {
+        throw ValidationException(
+            'Um combo deve ter pelo menos um componente');
+      }
+      await _validarComboItens(id, comboItens);
+      await _repository.replaceComboItens(id, comboItens);
+    }
+
+    // If turning off combo, clean up orphan combo_itens
+    if (data.containsKey('is_combo') && !isComboNow) {
+      await _repository.replaceComboItens(id, []);
+    }
+
     return obterPorId(id);
+  }
+
+  Future<void> _validarComboItens(
+      int? comboId, List<Map<String, dynamic>> itens) async {
+    for (final item in itens) {
+      final produtoId = item['produto_id'];
+      if (produtoId == null) {
+        throw ValidationException('produto_id é obrigatório em cada componente');
+      }
+      final pid = produtoId is int ? produtoId : int.tryParse(produtoId.toString());
+      if (pid == null) {
+        throw ValidationException('produto_id inválido: $produtoId');
+      }
+
+      // Validate quantity
+      final quantidade = item['quantidade'];
+      final qtd = quantidade is num
+          ? quantidade.toDouble()
+          : double.tryParse(quantidade?.toString() ?? '') ?? 0;
+      if (qtd <= 0) {
+        throw ValidationException(
+            'Quantidade do componente deve ser maior que zero');
+      }
+
+      // No self-reference
+      if (comboId != null && pid == comboId) {
+        throw ValidationException(
+            'Um combo não pode conter a si mesmo como componente');
+      }
+
+      // Check product exists and is not a combo (no nesting)
+      final produto = await _repository.findById(pid);
+      if (produto == null) {
+        throw NotFoundException('Produto componente $pid não encontrado');
+      }
+      if (produto.isCombo) {
+        throw ValidationException(
+            'O produto "${produto.descricao}" é um combo e não pode ser componente de outro combo');
+      }
+    }
   }
 
   Future<void> inativar(int id) async {

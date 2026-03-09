@@ -34,6 +34,10 @@ class ProdutosController {
             queryParams['ativo'] == 'true';
       }
 
+      if (queryParams['tamanho'] != null) {
+        params['tamanho'] = queryParams['tamanho'];
+      }
+
       final result = await _service.listar(params);
 
       return Response.ok(
@@ -71,10 +75,10 @@ class ProdutosController {
         );
       }
 
-      final produto = await _service.obterPorId(produtoId);
+      final data = await _service.obterPorIdComDetalhes(produtoId);
 
       return Response.ok(
-        jsonEncode({'data': produto.toJson()}),
+        jsonEncode({'data': data}),
         headers: {'Content-Type': 'application/json'},
       );
     } on ApiException catch (e) {
@@ -403,6 +407,38 @@ class ProdutosController {
 
       return Response.ok(
         jsonEncode({'data': result}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } on ApiException catch (e) {
+      return Response(
+        e.statusCode,
+        body: jsonEncode({'error': e.message}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({'error': 'Erro interno do servidor'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> comboItens(Request request, String id) async {
+    try {
+      final produtoId = int.tryParse(id);
+      if (produtoId == null) {
+        return Response(
+          400,
+          body: jsonEncode({'error': 'ID inválido'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final data = await _service.obterPorIdComDetalhes(produtoId);
+      final comboItens = data['combo_itens'] ?? [];
+
+      return Response.ok(
+        jsonEncode({'data': comboItens}),
         headers: {'Content-Type': 'application/json'},
       );
     } on ApiException catch (e) {

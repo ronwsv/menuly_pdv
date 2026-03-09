@@ -15,6 +15,14 @@ Router comprasRouter(ComprasController controller) {
         ),
   );
 
+  // importar-xml must come BEFORE /<id> to avoid wildcard conflict
+  router.post(
+    '/importar-xml',
+    Pipeline().addMiddleware(auth).addHandler(
+          (Request req) => controller.importarXml(req),
+        ),
+  );
+
   router.get(
     '/<id>',
     Pipeline().addMiddleware(auth).addHandler(

@@ -336,14 +336,34 @@ class _PdvControlPanelState extends State<PdvControlPanel> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    Text(p.descricao,
-                                        style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w500,
-                                            color:
-                                                AppTheme.textPrimary),
-                                        overflow:
-                                            TextOverflow.ellipsis),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(p.descricao,
+                                              style: TextStyle(
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w500,
+                                                  color:
+                                                      AppTheme.textPrimary),
+                                              overflow:
+                                                  TextOverflow.ellipsis),
+                                        ),
+                                        if (p.tamanho != null && p.tamanho!.isNotEmpty)
+                                          Container(
+                                            margin: const EdgeInsets.only(left: 6),
+                                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                            decoration: BoxDecoration(
+                                              color: AppTheme.primary.withOpacity(0.12),
+                                              borderRadius: BorderRadius.circular(3),
+                                            ),
+                                            child: Text(p.tamanho!,
+                                                style: TextStyle(
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w700,
+                                                    color: AppTheme.primary)),
+                                          ),
+                                      ],
+                                    ),
                                     Text(p.codigoBarras ?? '',
                                         style: TextStyle(
                                             fontSize: 11,
@@ -352,14 +372,27 @@ class _PdvControlPanelState extends State<PdvControlPanel> {
                                   ],
                                 ),
                               ),
-                              Text(
-                                  currencyFormat
-                                      .format(p.precoVenda),
-                                  style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color:
-                                          AppTheme.greenSuccess)),
+                              Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                      currencyFormat
+                                          .format(p.precoVenda),
+                                      style: TextStyle(
+                                          fontSize: 13,
+                                          fontWeight: FontWeight.w600,
+                                          color:
+                                              AppTheme.greenSuccess)),
+                                  Text(
+                                      'Est: ${p.estoqueEfetivo}${p.isCombo ? ' (combo)' : ''}',
+                                      style: TextStyle(
+                                          fontSize: 10,
+                                          color: p.estoqueEfetivo <= 0
+                                              ? AppTheme.error
+                                              : AppTheme.textMuted)),
+                                ],
+                              ),
                             ],
                           ),
                         ),

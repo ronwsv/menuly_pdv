@@ -154,4 +154,70 @@ class ComprasRepository {
         'INSERT INTO historico_estoque (${columns.join(', ')}) VALUES (${placeholders.join(', ')})';
     await Database.instance.execute(sql, data);
   }
+
+  Future<Map<String, String?>?> buscarCompraPorChaveNfe(String chaveNfe) async {
+    final results = await Database.instance.query(
+      'SELECT id, fornecedor_id, data_compra, valor_final FROM compras WHERE chave_nfe = :chave',
+      {'chave': chaveNfe},
+    );
+    if (results.isEmpty) return null;
+    return results.first;
+  }
+
+  Future<Map<String, String?>?> buscarProdutoPorBarcode(String codigo) async {
+    final results = await Database.instance.query(
+      'SELECT id, descricao, codigo_barras, preco_custo, preco_venda, estoque_atual '
+      'FROM produtos WHERE codigo_barras = :codigo AND ativo = 1',
+      {'codigo': codigo},
+    );
+    if (results.isEmpty) return null;
+    return results.first;
+  }
+
+  Future<Map<String, String?>?> buscarProdutoPorCodigoInterno(String codigo) async {
+    final results = await Database.instance.query(
+      'SELECT id, descricao, codigo_barras, codigo_interno, preco_custo, preco_venda, estoque_atual '
+      'FROM produtos WHERE codigo_interno = :codigo AND ativo = 1',
+      {'codigo': codigo},
+    );
+    if (results.isEmpty) return null;
+    return results.first;
+  }
+
+  Future<Map<String, String?>?> buscarProdutoPorBarcodeIncluindoInativos(String codigo) async {
+    final results = await Database.instance.query(
+      'SELECT id, descricao, codigo_barras, preco_custo, preco_venda, estoque_atual, ativo '
+      'FROM produtos WHERE codigo_barras = :codigo',
+      {'codigo': codigo},
+    );
+    if (results.isEmpty) return null;
+    return results.first;
+  }
+
+  Future<int> criarProduto(Map<String, String> data) async {
+    final columns = data.keys.toList();
+    final placeholders = columns.map((c) => ':$c').toList();
+    final sql =
+        'INSERT INTO produtos (${columns.join(', ')}) VALUES (${placeholders.join(', ')})';
+    final result = await Database.instance.execute(sql, data);
+    return result.lastInsertID.toInt();
+  }
+
+  Future<int> criarFornecedor(Map<String, String> data) async {
+    final columns = data.keys.toList();
+    final placeholders = columns.map((c) => ':$c').toList();
+    final sql =
+        'INSERT INTO fornecedores (${columns.join(', ')}) VALUES (${placeholders.join(', ')})';
+    final result = await Database.instance.execute(sql, data);
+    return result.lastInsertID.toInt();
+  }
+
+  Future<Map<String, String?>?> buscarFornecedorPorCnpj(String cnpj) async {
+    final results = await Database.instance.query(
+      'SELECT id, razao_social, nome_fantasia, cnpj FROM fornecedores WHERE cnpj = :cnpj',
+      {'cnpj': cnpj},
+    );
+    if (results.isEmpty) return null;
+    return results.first;
+  }
 }

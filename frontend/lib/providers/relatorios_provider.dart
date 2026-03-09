@@ -7,14 +7,22 @@ class RelatoriosProvider extends ChangeNotifier {
 
   Map<String, dynamic> _vendasResumo = {};
   List<Map<String, dynamic>> _produtosMaisVendidos = [];
+  List<Map<String, dynamic>> _comissoes = [];
+  List<Map<String, dynamic>> _resumoComissoes = [];
+  int _comissoesTotal = 0;
   bool _isLoading = false;
+  bool _isLoadingComissoes = false;
   String? _error;
 
   RelatoriosProvider(this._api);
 
   Map<String, dynamic> get vendasResumo => _vendasResumo;
   List<Map<String, dynamic>> get produtosMaisVendidos => _produtosMaisVendidos;
+  List<Map<String, dynamic>> get comissoes => _comissoes;
+  List<Map<String, dynamic>> get resumoComissoes => _resumoComissoes;
+  int get comissoesTotal => _comissoesTotal;
   bool get isLoading => _isLoading;
+  bool get isLoadingComissoes => _isLoadingComissoes;
   String? get error => _error;
 
   Future<void> carregarResumoVendas({String? periodo}) async {
@@ -94,6 +102,64 @@ class RelatoriosProvider extends ChangeNotifier {
     }
 
     _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> carregarComissoes({
+    int? vendedorId,
+    String? dataInicio,
+    String? dataFim,
+    int page = 1,
+  }) async {
+    _isLoadingComissoes = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final params = <String, String>{
+        'page': page.toString(),
+        'per_page': '50',
+      };
+      if (vendedorId != null) params['vendedor_id'] = vendedorId.toString();
+      if (dataInicio != null) params['data_inicio'] = dataInicio;
+      if (dataFim != null) params['data_fim'] = dataFim;
+
+      final result = await _api.get(ApiConfig.comissoes, queryParams: params);
+      final list = result['data'] as List;
+      _comissoes = list.cast<Map<String, dynamic>>();
+      final pagination = result['pagination'] as Map<String, dynamic>?;
+      _comissoesTotal = (pagination?['total'] as int?) ?? _comissoes.length;
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoadingComissoes = false;
+    notifyListeners();
+  }
+
+  Future<void> carregarResumoComissoes({
+    int? vendedorId,
+    String? dataInicio,
+    String? dataFim,
+  }) async {
+    _isLoadingComissoes = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final params = <String, String>{};
+      if (vendedorId != null) params['vendedor_id'] = vendedorId.toString();
+      if (dataInicio != null) params['data_inicio'] = dataInicio;
+      if (dataFim != null) params['data_fim'] = dataFim;
+
+      final result = await _api.get(ApiConfig.comissoesResumo, queryParams: params);
+      final list = result['data'] as List;
+      _resumoComissoes = list.cast<Map<String, dynamic>>();
+    } catch (e) {
+      _error = e.toString();
+    }
+
+    _isLoadingComissoes = false;
     notifyListeners();
   }
 

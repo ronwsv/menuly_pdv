@@ -241,24 +241,38 @@ class _ClientesScreenState extends State<ClientesScreen> {
       );
     }
 
-    return SingleChildScrollView(
-      child: SizedBox(
-        width: double.infinity,
-        child: DataTable(
-          headingRowColor:
-              WidgetStateProperty.all(AppTheme.scaffoldBackground),
-          dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
-          border: TableBorder.all(color: AppTheme.border, width: 0.5),
-          columns: [
-            DataColumn(label: Text('Nome')),
-            DataColumn(label: Text('CPF/CNPJ')),
-            DataColumn(label: Text('Telefone')),
-            DataColumn(label: Text('Email')),
-            DataColumn(label: Text('Cidade/UF')),
-            DataColumn(label: Text('Status')),
-            DataColumn(label: Text('Acoes')),
-          ],
-          rows: clientes.map((c) => _buildRow(c)).toList(),
+    final verticalController = ScrollController();
+    final horizontalController = ScrollController();
+    return Scrollbar(
+      controller: verticalController,
+      thumbVisibility: true,
+      child: Scrollbar(
+        controller: horizontalController,
+        thumbVisibility: true,
+        notificationPredicate: (notification) => notification.depth == 1,
+        child: SingleChildScrollView(
+          controller: verticalController,
+          child: SingleChildScrollView(
+            controller: horizontalController,
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              headingRowColor:
+                  WidgetStateProperty.all(AppTheme.scaffoldBackground),
+              dataRowColor: WidgetStateProperty.all(AppTheme.cardSurface),
+              border: TableBorder.all(color: AppTheme.border, width: 0.5),
+              columnSpacing: 24,
+              columns: [
+                DataColumn(label: Text('Nome')),
+                DataColumn(label: Text('CPF/CNPJ')),
+                DataColumn(label: Text('Telefone')),
+                DataColumn(label: Text('Email')),
+                DataColumn(label: Text('Cidade/UF')),
+                DataColumn(label: Text('Status')),
+                DataColumn(label: Text('Acoes')),
+              ],
+              rows: clientes.map((c) => _buildRow(c)).toList(),
+            ),
+          ),
         ),
       ),
     );
@@ -271,11 +285,18 @@ class _ClientesScreenState extends State<ClientesScreen> {
     ].join('/');
 
     return DataRow(cells: [
-      DataCell(Text(
-        cliente.nome,
-        style: TextStyle(
-          color: AppTheme.textPrimary,
-          fontWeight: FontWeight.w600,
+      DataCell(Tooltip(
+        message: cliente.nome,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 200),
+          child: Text(
+            cliente.nome,
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
         ),
       )),
       DataCell(Text(
@@ -286,9 +307,16 @@ class _ClientesScreenState extends State<ClientesScreen> {
         cliente.telefone ?? '-',
         style: TextStyle(color: AppTheme.textPrimary),
       )),
-      DataCell(Text(
-        cliente.email ?? '-',
-        style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+      DataCell(Tooltip(
+        message: cliente.email ?? '-',
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: 200),
+          child: Text(
+            cliente.email ?? '-',
+            style: TextStyle(color: AppTheme.textSecondary, fontSize: 13),
+            overflow: TextOverflow.ellipsis,
+          ),
+        ),
       )),
       DataCell(Text(
         cidadeUf.isEmpty ? '-' : cidadeUf,

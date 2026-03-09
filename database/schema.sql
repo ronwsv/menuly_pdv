@@ -1,7 +1,7 @@
 -- ====================================================================
 -- MENULY PDV - Schema Completo do Banco de Dados
 -- MySQL/MariaDB 10.6+
--- 26 tabelas | Charset: utf8mb4 | Engine: InnoDB
+-- 32 tabelas | Charset: utf8mb4 | Engine: InnoDB
 -- ====================================================================
 
 -- Criar banco e usuário
@@ -44,7 +44,9 @@ CREATE TABLE IF NOT EXISTS usuarios (
   perm_servicos TINYINT(1) DEFAULT 0,
   perm_ordens_servico TINYINT(1) DEFAULT 0,
   perm_devolucoes TINYINT(1) DEFAULT 0,
+  perm_consignacoes TINYINT(1) DEFAULT 0,
   perm_relatorios TINYINT(1) DEFAULT 0,
+  comissao_percentual DECIMAL(5,2) DEFAULT NULL,
   ativo TINYINT(1) DEFAULT 1,
   auto_login TINYINT(1) DEFAULT 0,
   criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -156,19 +158,35 @@ CREATE TABLE IF NOT EXISTS produtos (
   preco_venda DECIMAL(10,2) NOT NULL,
   margem_lucro DECIMAL(5,2),
   unidade VARCHAR(10) NOT NULL DEFAULT 'un',
+  tamanho VARCHAR(20) DEFAULT NULL,
   estoque_atual INT DEFAULT 0,
   estoque_minimo INT DEFAULT 0,
   imagem_path VARCHAR(500),
   thumbnail_path VARCHAR(500),
   ativo TINYINT(1) DEFAULT 1,
   bloqueado TINYINT(1) DEFAULT 0,
+  is_combo TINYINT(1) DEFAULT 0,
   criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
   atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (categoria_id) REFERENCES categorias(id),
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id),
   INDEX idx_produtos_barras (codigo_barras),
   INDEX idx_produtos_descricao (descricao),
+  INDEX idx_produtos_tamanho (tamanho),
   INDEX idx_produtos_ncm (ncm_code)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ====================================================================
+-- TABELA 6B: COMBO ITENS (Componentes de produtos combo/kit)
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS combo_itens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  combo_id INT NOT NULL,
+  produto_id INT NOT NULL,
+  quantidade DECIMAL(10,3) NOT NULL DEFAULT 1,
+  FOREIGN KEY (combo_id) REFERENCES produtos(id) ON DELETE CASCADE,
+  FOREIGN KEY (produto_id) REFERENCES produtos(id),
+  INDEX idx_combo_itens_combo (combo_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ====================================================================
@@ -249,6 +267,7 @@ CREATE TABLE IF NOT EXISTS venda_itens (
   preco_unitario DECIMAL(10,2) NOT NULL,
   desconto DECIMAL(10,2) DEFAULT 0,
   total DECIMAL(10,2) NOT NULL,
+  combo_snapshot JSON DEFAULT NULL COMMENT 'Snapshot dos componentes do combo no momento da venda',
   criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (venda_id) REFERENCES vendas(id),
   FOREIGN KEY (produto_id) REFERENCES produtos(id),
@@ -333,7 +352,8 @@ CREATE TABLE IF NOT EXISTS compras (
   atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id),
   INDEX idx_compras_fornecedor (fornecedor_id),
-  INDEX idx_compras_data (data_compra)
+  INDEX idx_compras_data (data_compra),
+  UNIQUE INDEX idx_compras_chave_nfe (chave_nfe)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- ====================================================================
@@ -618,9 +638,107 @@ CREATE TABLE IF NOT EXISTS caixa_fechamentos (
   INDEX idx_fech_data (criado_em)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- ====================================================================
+-- TABELA 28: CONSIGNAÇÕES
+-- Consignações de saída (para clientes) e entrada (de fornecedores)
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS consignacoes (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  numero VARCHAR(20) NOT NULL UNIQUE,
+  tipo ENUM('saida', 'entrada') NOT NULL,
+  cliente_id INT,
+  fornecedor_id INT,
+  usuario_id INT NOT NULL,
+  status ENUM('aberta', 'parcial', 'fechada', 'cancelada') DEFAULT 'aberta',
+  total_itens INT NOT NULL DEFAULT 0,
+  valor_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+  valor_acertado DECIMAL(10,2) NOT NULL DEFAULT 0,
+  observacoes TEXT,
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  atualizado_em DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (cliente_id) REFERENCES clientes(id),
+  FOREIGN KEY (fornecedor_id) REFERENCES fornecedores(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  INDEX idx_consig_tipo (tipo),
+  INDEX idx_consig_status (status),
+  INDEX idx_consig_cliente (cliente_id),
+  INDEX idx_consig_fornecedor (fornecedor_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ====================================================================
+-- TABELA 29: CONSIGNAÇÃO ITENS
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS consignacao_itens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  consignacao_id INT NOT NULL,
+  produto_id INT NOT NULL,
+  quantidade DECIMAL(10,3) NOT NULL,
+  quantidade_vendida DECIMAL(10,3) DEFAULT 0,
+  quantidade_devolvida DECIMAL(10,3) DEFAULT 0,
+  preco_unitario DECIMAL(10,2) NOT NULL,
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (consignacao_id) REFERENCES consignacoes(id),
+  FOREIGN KEY (produto_id) REFERENCES produtos(id),
+  INDEX idx_consig_itens_consig (consignacao_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ====================================================================
+-- TABELA 30: CONSIGNAÇÃO ACERTOS
+-- Cada acerto parcial ou total de uma consignação
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS consignacao_acertos (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  consignacao_id INT NOT NULL,
+  usuario_id INT NOT NULL,
+  valor_vendido DECIMAL(10,2) NOT NULL DEFAULT 0,
+  forma_pagamento VARCHAR(50),
+  observacoes TEXT,
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (consignacao_id) REFERENCES consignacoes(id),
+  FOREIGN KEY (usuario_id) REFERENCES usuarios(id),
+  INDEX idx_consig_acerto_consig (consignacao_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ====================================================================
+-- TABELA 31: CONSIGNAÇÃO ACERTO ITENS
+-- Detalhe por item em cada acerto
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS consignacao_acerto_itens (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  acerto_id INT NOT NULL,
+  consignacao_item_id INT NOT NULL,
+  quantidade_vendida DECIMAL(10,3) DEFAULT 0,
+  quantidade_devolvida DECIMAL(10,3) DEFAULT 0,
+  valor DECIMAL(10,2) NOT NULL DEFAULT 0,
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (acerto_id) REFERENCES consignacao_acertos(id),
+  FOREIGN KEY (consignacao_item_id) REFERENCES consignacao_itens(id),
+  INDEX idx_consig_acerto_item_acerto (acerto_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ====================================================================
+-- TABELA 32: COMISSÕES
+-- Registro de comissão de venda por vendedor
+-- ====================================================================
+CREATE TABLE IF NOT EXISTS comissoes (
+  id INT PRIMARY KEY AUTO_INCREMENT,
+  venda_id INT NOT NULL,
+  vendedor_id INT NOT NULL,
+  valor_venda DECIMAL(10,2) NOT NULL,
+  percentual DECIMAL(5,2) NOT NULL,
+  valor_comissao DECIMAL(10,2) NOT NULL,
+  status ENUM('ativa', 'cancelada') DEFAULT 'ativa',
+  criado_em DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (venda_id) REFERENCES vendas(id),
+  FOREIGN KEY (vendedor_id) REFERENCES usuarios(id),
+  INDEX idx_comissao_vendedor (vendedor_id),
+  INDEX idx_comissao_status (status),
+  INDEX idx_comissao_criado (criado_em)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- Reabilitar verificação de FK
 SET FOREIGN_KEY_CHECKS = 1;
 
 -- ====================================================================
--- FIM DO SCHEMA - 27 tabelas criadas
+-- FIM DO SCHEMA - 32 tabelas criadas
 -- ====================================================================
